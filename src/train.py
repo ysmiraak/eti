@@ -30,7 +30,6 @@ assert src_train.shape[1] <= len_cap
 assert tgt_train.shape[1] <= len_cap
 assert src_valid.shape[1] <= len_cap
 assert tgt_valid.shape[1] <= len_cap
-epoch = len(src_train) // batch_size
 
 # # for profiling
 # from util_tf import profile
@@ -74,15 +73,16 @@ if ckpt:
 else:
     tf.global_variables_initializer().run()
 
-step_eval = epoch // 8
+step_eval = 32
 summ = tf.summary.merge(
     (tf.summary.scalar('step_loss', valid.loss)
      , tf.summary.scalar('step_acc', valid.acc)))
 
-for _ in range(15):
-    for _ in tqdm(range(12 * epoch), ncols= 70):
-        sess.run(train.up)
+while True:
+    for _ in range(len(src_train) // batch_size // step_eval):
+        for _ in tqdm(range(step_eval), ncols= 70):
+            sess.run(train.up)
         step = sess.run(train.step)
-        if not step % step_eval: wtr.add_summary(sess.run(summ), step)
+        wtr.add_summary(sess.run(summ), step)
     saver.save(sess, "../trial/model/{}{}".format(trial, step), write_meta_graph= False)
     save("../trial/pred/{}{}".format(trial, step), trans_valid())

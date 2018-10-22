@@ -93,18 +93,15 @@ class Transformer(Record):
 
         """
         assert not dim % 2
-        emb_src = Linear(dim, dim_src, 'emb_src')
-        emb_pos = Linear(dim, tgt_cap, 'emb_pos')
         with tf.variable_scope('encode'):
             encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
-        with tf.variable_scope('bridge'):
-            bridge = AttentionBlock(dim, dim_mid, act, "bridge")
         with tf.variable_scope('decode'):
             decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
         return Transformer(
             dim= dim, end= tf.constant(end, tf.int32, (), 'end')
-            , emb_src= emb_src, encode= encode, bridge= bridge
-            , emb_pos= emb_pos, decode= decode
+            , encode= encode, emb_src= Linear(dim, dim_src, 'emb_src')
+            , decode= decode, emb_pos= Linear(dim, tgt_cap, 'emb_pos')
+            , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
             , logit= Affine(dim_tgt, dim, 'logit')
             , smooth= Smooth(smooth, dim_tgt)
             , dropout= Dropout(dropout, (None, None, dim)))
@@ -130,11 +127,12 @@ class Transformer(Record):
             src = src_ = placeholder(tf.int32, (None, None), src)
             len_src = tf.reduce_sum(tf.to_int32(~ tf.reduce_all(tf.equal(src, end), 0)))
             src = src[:,:len_src]
+        with tf.variable_scope('mask'):
+            mask = tf.to_float(tf.expand_dims(tf.not_equal(src, end), 1))
         return Transformer(
             position= Sinusoid(dim, src_cap)
-            , mask= tf.to_float(tf.expand_dims(tf.not_equal(src, end), 1))
-            , src_= src_, src= src
-            , tgt_= tgt_,
+            , src_= src_, src= src, mask= mask
+            , tgt_= tgt_
             , **self)
 
     def build(self, trainable= True):
@@ -150,17 +148,16 @@ class Transformer(Record):
 
         """
         logit, dropout = self.logit, self.dropout if trainable else identity
-        mask, position = self.mask, self.position
+        src, mask, position = self.src, self.mask, self.position
+        encode, emb_src = self.encode, self.emb_src
+        decode, emb_pos = self.decode, self.emb_pos
         bridge = self.bridge
-        encode, emb_src, src = self.encode, self.emb_src, self.src
-        decode, emb_pos, tgt = self.decode, self.emb_pos, self.tgt_
         # todo mask current step
-        with tf.variable_scope('emb_src'):
-            w = position(tf.shape(src)[1]) + dropout(emb_src.embed(src))
+        with tf.variable_scope('emb_src'): w = position(tf.shape(src)[1]) + dropout(emb_src.embed(src))
+        with tf.variable_scope('emb_pos'): x = tf.tile(tf.expand_dims(emb_pos.kern, 0), (tf.shape(src)[0], 1, 1))
         with tf.variable_scope('encode'):
             for enc in encode: w = enc(w, mask, dropout)
-        with tf.variable_scope('bridge'):
-            x = bridge(emb_pos[:tf.shape(tgt)[1]], None, dropout, w)
+        x = bridge(x, None, dropout, w)
         with tf.variable_scope('decode'):
             for dec in decode: x = dec(x, None, dropout)
         y = logit(x)

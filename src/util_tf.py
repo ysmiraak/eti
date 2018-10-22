@@ -126,7 +126,8 @@ class Linear(Record):
         self.kern = tf.get_variable(name, (m, n))
 
     def __call__(self, x, name= None):
-        return tf.tensordot(x, self.kern, 1)
+        with tf.variable_scope(name or self.name):
+            return tf.tensordot(x, self.kern, 1)
 
     def embed(self, x, name= 'embed'):
         return tf.gather(self.kern, x, name= name or self.name)
