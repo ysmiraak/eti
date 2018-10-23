@@ -4,7 +4,7 @@
 trial      = 'm'
 len_cap    = 2**8
 batch_size = 2**6
-valid_size = batch_size * 4
+valid_size = batch_size * 8
 summ_size  = valid_size * 4
 step_summ  = 2**8
 ckpt       = None
@@ -91,7 +91,7 @@ def summ(m= valid
         for i, j in partition(len(src), batch_size, discard= False)))
     return sess.run(summary, {m.loss: np.mean(loss), m.acc: np.mean(acc)})
 
-while True:
+for _ in range(36):
     for _ in range(len(src_train) // batch_size // step_summ):
         for _ in tqdm(range(step_summ), ncols= 70):
             sess.run(train.up)
