@@ -96,9 +96,11 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
         with tf.variable_scope('decode'):
+            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(tgt_cap), 0))
             decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
         return Transformer(
-            dim= dim, end= tf.constant(end, tf.int32, (), 'end')
+            dim= dim, mask_tgt= mask_tgt
+            , end= tf.constant(end, tf.int32, (), 'end')
             , encode= encode, emb_src= Linear(dim, dim_src, 'emb_src')
             , decode= decode, emb_pos= Linear(dim, tgt_cap, 'emb_pos')
             , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
@@ -120,18 +122,19 @@ class Transformer(Record):
         affect any model parameters.
 
         """
-        end, dim = self.end, self.dim
         with tf.variable_scope('tgt'):
             tgt_ = placeholder(tf.int32, (None, None), tgt)
         with tf.variable_scope('src'):
-            src = src_ = placeholder(tf.int32, (None, None), src)
-            len_src = tf.reduce_sum(tf.to_int32(~ tf.reduce_all(tf.equal(src, end), 0)))
-            src = src[:,:len_src]
-        with tf.variable_scope('mask'):
-            mask = tf.to_float(tf.expand_dims(tf.not_equal(src, end), 1))
+            src_ = placeholder(tf.int32, (None, None), src)
+            not_end = tf.to_float(tf.expand_dims(tf.not_equal(src_, self.end), 1))
+            len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_end, 0)))
+            mask_src = tf.log(not_end + tf.expand_dims(1 - tf.eye(len_src), 0))
+            mask = tf.log(not_end)
+            src = src_[:,:len_src]
         return Transformer(
-            position= Sinusoid(dim, src_cap)
-            , src_= src_, src= src, mask= mask
+            position= Sinusoid(self.dim, src_cap)
+            , mask= mask, mask_src= mask_src
+            , src_= src_, src= src
             , tgt_= tgt_
             , **self)
 
@@ -147,31 +150,30 @@ class Transformer(Record):
         must be called after `data`.
 
         """
-        logit, dropout = self.logit, self.dropout if trainable else identity
-        src, mask, position = self.src, self.mask, self.position
-        encode, emb_src = self.encode, self.emb_src
-        decode, emb_pos = self.decode, self.emb_pos
-        bridge = self.bridge
-        # todo mask current step
-        with tf.variable_scope('emb_src'): w = position(tf.shape(src)[1]) + dropout(emb_src.embed(src))
-        with tf.variable_scope('emb_pos'): x = tf.tile(tf.expand_dims(emb_pos.kern, 0), (tf.shape(src)[0], 1, 1))
+        dropout = self.dropout if trainable else identity
+        with tf.variable_scope('emb_src'):
+            shape = tf.shape(self.src)
+            w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
+        with tf.variable_scope('emb_pos'):
+            x = tf.tile(dropout(tf.expand_dims(self.emb_pos.kern, 0)), (shape[0], 1, 1))
         with tf.variable_scope('encode'):
-            for enc in encode: w = enc(w, mask, dropout)
-        x = bridge(x, None, dropout, w)
+            for enc in self.encode: w = enc(w, self.mask_src, dropout)
+        x = self.bridge(x, self.mask, dropout, w)
         with tf.variable_scope('decode'):
-            for dec in decode: x = dec(x, None, dropout)
-        y = logit(x)
+            for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
+        y = self.logit(x)
         p = tf.argmax(y, -1, output_type= tf.int32, name= 'pred')
         return Transformer(output= y, pred= p, **self)._eval()
 
     def _eval(self):
-        gold, pred, output, smooth = self.tgt_, self.pred, self.output, self.smooth
         with tf.variable_scope('acc'):
-            acc = tf.reduce_mean(tf.to_float(tf.equal(gold, pred)))
+            acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, self.pred)))
         with tf.variable_scope('loss'):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits= output, labels= smooth(gold)))
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels= self.smooth(self.gold)
+                , logits= self.output))
         with tf.variable_scope('prob'):
-            prob = tf.nn.softmax(output, name= 'prob')
+            prob = tf.nn.softmax(self.output, name= 'prob')
         return Transformer(prob= prob, loss= loss, acc= acc, **self)
 
     def train(self, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
@@ -182,10 +184,9 @@ class Transformer(Record):
           up :        update operation
 
         """
-        dim, loss = self.dim, self.loss
         with tf.variable_scope('lr'):
             s = tf.train.get_or_create_global_step()
             t = tf.to_float(s + 1)
-            lr = (dim ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
-        up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(loss, s)
+            lr = (self.dim ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
+        up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
         return Transformer(step= s, lr= lr, up= up, **self)
