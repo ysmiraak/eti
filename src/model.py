@@ -48,15 +48,15 @@ class AttentionBlock(Record):
             with tf.variable_scope('att'):
                 self.att = Attention(dim, layer= Multilayer, mid= dim_mid, act= act)
                 self.norm_att = Normalize(dim)
-            with tf.variable_scope('fwd'):
-                self.fwd = Multilayer(dim, dim, dim_mid, act)
-                self.norm_fwd = Normalize(dim)
+            with tf.variable_scope('mlp'):
+                self.mlp = Multilayer(dim, dim, dim_mid, act)
+                self.norm_mlp = Normalize(dim)
 
     def __call__(self, x, mask, dropout, w= None, name= None):
         if w is None: w = x
         with tf.variable_scope(name or self.name):
             with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, w, mask)))
-            with tf.variable_scope('fwd'): x = self.norm_fwd(x + dropout(self.fwd(x)))
+            with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
             return x
 
 
@@ -79,17 +79,16 @@ class Transformer(Record):
             , dropout= 0.1):
         """-> Transformer with fields
 
-            end : i32 ()
-        emb_src : Linear
-        emb_pos : Linear
-         encode : tuple AttentionBlock
-         decode : tuple AttentionBlock
-         bridge : AttentionBlock
-          logit : Affine
-         smooth : Smooth
-        dropout : Dropout
-
-        `end` is treated as the padding for both source and target.
+             end : i32 ()
+        mask_tgt : f32 (1, t, t)
+         emb_src : Linear
+         emb_pos : Linear
+          encode : tuple AttentionBlock
+          decode : tuple AttentionBlock
+          bridge : AttentionBlock
+           logit : Affine
+          smooth : Smooth
+         dropout : Dropout
 
         """
         assert not dim % 2
@@ -111,10 +110,11 @@ class Transformer(Record):
     def data(self, src= None, tgt= None, src_cap= None):
         """-> Transformer with new fields
 
-            tgt_ : i32 (b, ?) target feed, in range `[0, dim_tgt)`
-            src_ : i32 (b, ?) source feed, in range `[0, dim_src)`
-             src : i32 (b, s) source with `end` trimmed among the batch
-            mask : f32 (b, s) source mask
+            tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
+            src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
+             src : i32 (b, s)    source with `end` trimmed among the batch
+            mask : f32 (b, 1, s) bridge mask
+        mask_src : f32 (b, s, s) source mask
         position : Sinusoid
 
         setting `src_cap` makes it more efficient for training.  you
@@ -148,8 +148,6 @@ class Transformer(Record):
             loss : f32 ()              prediction loss
              acc : f32 ()              accuracy
 
-        must be called after `data`.
-
         """
         dropout = self.dropout if trainable else identity
         with tf.variable_scope('emb_src'):
@@ -159,11 +157,12 @@ class Transformer(Record):
             x = tf.tile(dropout(tf.expand_dims(self.emb_pos.kern, 0)), (shape[0], 1, 1))
         with tf.variable_scope('encode'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        x = self.bridge(x, self.mask, dropout, w)
+        x = self.bridge(x, self.mask, dropout, w, 'bridge')
         with tf.variable_scope('decode'):
             for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
-        y = self.logit(x)
-        p = tf.argmax(y, -1, output_type= tf.int32, name= 'pred')
+        y = self.logit(x, 'logit')
+        with tf.variable_scope('pred'):
+            p = tf.argmax(y, -1, output_type= tf.int32)
         return Transformer(output= y, pred= p, **self)._eval()
 
     def _eval(self):

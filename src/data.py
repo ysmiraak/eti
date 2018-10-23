@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-
 path = "../trial/data"
-
 
 from os.path import join
 from util import partial, diter, PointedIndex

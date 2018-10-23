@@ -10,12 +10,13 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     wtr.add_run_metadata(meta, tag)
 
 
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs, name= 'pipe'):
     """see `tf.data.Dataset.from_generator`."""
-    return tf.data.Dataset.from_generator(*args, **kwargs) \
-                          .prefetch(1) \
-                          .make_one_shot_iterator() \
-                          .get_next()
+    with tf.variable_scope(name):
+        return tf.data.Dataset.from_generator(*args, **kwargs) \
+                              .prefetch(1) \
+                              .make_one_shot_iterator() \
+                              .get_next()
 
 
 def placeholder(dtype, shape, x= None, name= None):
