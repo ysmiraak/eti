@@ -67,13 +67,12 @@ class Smooth(Record):
             self.rate = placeholder(tf.float32, (), rate, 'rate')
             self.shared = self.rate / (dim or 2)
             self.smooth = 1.0 - self.rate
-            if dim: self.smooth += self.shared
 
     def __call__(self, x, name= None):
-        if self.dim:
-            return tf.one_hot(x, self.dim, self.smooth, self.shared, name= name or self.name)
-        else:
-            with tf.variable_scope(name or self.name):
+        with tf.variable_scope(name or self.name):
+            if self.dim:
+                return tf.one_hot(x, self.dim, self.smooth + self.shared, self.shared)
+            else:
                 return x * self.smooth + self.shared
 
 
