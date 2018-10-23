@@ -11,7 +11,7 @@ from model import Transformer
 from os.path import expanduser, join
 from tqdm import tqdm
 from util import PointedIndex
-from util_io import decode, save
+from util_io import encode, decode, save
 from util_np import np
 from util_tf import tf, batch
 
@@ -39,26 +39,26 @@ assert tgt_valid.shape[1] <= len_cap
 #     with tf.summary.FileWriter(join(logdir, "graph"), sess.graph) as wtr:
 #         profile(sess, wtr, m.acc, {m.src_: src_valid[:batch_size], m.tgt_: tgt_valid[:batch_size]})
 
-####################
-# validation model #
-####################
+###############
+# build model #
+###############
 
 model = Transformer.new()
 valid = model.data(*batch((src_valid, tgt_valid), batch_size), len_cap).build(trainable= False)
 train = model.data(*batch((src_train, tgt_train), batch_size), len_cap).build().train()
 
+idx_src = PointedIndex(np.load("../trial/data/index_src.npy").item())
 idx_tgt = PointedIndex(np.load("../trial/data/index_tgt.npy").item())
+
+def trans(s, m= valid, idx_src= idx_src, idx_tgt= idx_tgt):
+    src = np.array(encode(idx_src, s)).reshape(1, -1)
+    return decode(idx_tgt, m.pred.eval({m.src: src})[0])
+
 def trans_valid(m= valid, src= src_valid, idx= idx_tgt, batch_size= batch_size):
     rng = range(0, len(src) + batch_size, batch_size)
     for i, j in zip(rng, rng[1:]):
         for p in m.pred.eval({m.src_: src[i:j]}):
             yield decode(idx, p)
-
-# from util_io import encode
-# idx_src = PointedIndex(np.load("../trial/data/index_src.npy").item())
-# def trans(s, m= valid, idx_src= idx_src, idx_tgt= idx_tgt):
-#     src = np.array(encode(idx_src, s)).reshape(1, -1)
-#     return decode(idx_tgt, m.pred.eval({m.src: src})[0])
 
 ############
 # training #
