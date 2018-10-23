@@ -126,8 +126,9 @@ class Transformer(Record):
             tgt_ = placeholder(tf.int32, (None, None), tgt)
         with tf.variable_scope('src'):
             src_ = placeholder(tf.int32, (None, None), src)
-            not_end = tf.to_float(tf.expand_dims(tf.not_equal(src_, self.end), 1))
+            not_end = tf.to_float(tf.not_equal(src_, self.end))
             len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_end, 0)))
+            not_end = tf.expand_dims(not_end[:,:len_src], 1)
             mask_src = tf.log(not_end + tf.expand_dims(1 - tf.eye(len_src), 0))
             mask = tf.log(not_end)
             src = src_[:,:len_src]
@@ -167,10 +168,10 @@ class Transformer(Record):
 
     def _eval(self):
         with tf.variable_scope('acc'):
-            acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, self.pred)))
+            acc = tf.reduce_mean(tf.to_float(tf.equal(self.tgt_, self.pred)))
         with tf.variable_scope('loss'):
             loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-                labels= self.smooth(self.gold)
+                labels= self.smooth(self.tgt_)
                 , logits= self.output))
         with tf.variable_scope('prob'):
             prob = tf.nn.softmax(self.output, name= 'prob')
