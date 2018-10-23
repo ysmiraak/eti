@@ -195,7 +195,7 @@ class AdditiveAttention(Record):
         with tf.variable_scope(name or self.name):
             # bts <- bts1 <- btsk <- (b1sk <- bsk <- bsd) + (bt1k <- btk <- btq)
             a = tf.squeeze(self.a(self.act(tf.expand_dims(self.k(value), 1) + tf.expand_dims(self.q(query), 2))), 3)
-            if mask is not None: a += tf.log(mask)
+            if mask is not None: a += mask
             return tf.nn.softmax(a) @ value # btd <- bts @ bsd
 
 
@@ -230,7 +230,7 @@ class TransformerAttention(Record):
             # hbts <- (hbtc <- btn <- btm) @ (hbcs <- hbsc <- btn <- btn)
             a = tf.matmul(stack_split(self.q(query)), stack_split(self.k(value)), transpose_b= True)
             a *= (self.n // self.num_head) ** -0.5
-            if mask is not None: a += tf.log(mask)
+            if mask is not None: a += mask
             a = tf.nn.softmax(a)
             # btn <- hbtc <- hbts @ (hbsc <- bsn <- bsn)
             return tf.concat(tf.unstack(a @ stack_split(self.v(value))), -1)
@@ -256,10 +256,10 @@ class QueryAttention(Record):
             a = tf.matmul(query, value, transpose_b= True) # bts <- btn @ (bns <- bsn)
             if softmax:
                 if scale: a *= self.n ** -0.5
-                if mask is not None: a += tf.log(mask)
+                if mask is not None: a += mask
                 a = tf.nn.softmax(a)
             else:
-                if mask is not None: a *= mask
+                if mask is not None: a *= tf.exp(mask)
                 a = tf.square(a)
                 a /= tf.reduce_sum(a, -1, True) + 1e-8
             a @= value # btn <- bts @ bsn
