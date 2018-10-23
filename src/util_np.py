@@ -16,9 +16,22 @@ def vpack(arrays, fill, offset= 0, extra= 0):
     return a
 
 
-def permute(n, seed= 0):
-    """returns a random permutation of the first `n` natural numbers."""
-    np.random.seed(seed)
-    i = np.arange(n)
-    np.random.shuffle(i)
-    return i
+def partition(n, m, discard= True):
+    """yields pairs of indices which partitions `n` nats by `m`.  if not
+    `discard`, also yields the final incomplete partition.
+
+    """
+    steps = range(0, 1 + n, m)
+    yield from zip(steps, steps[1:])
+    if n % m and not discard:
+        yield n - (n % m), n
+
+
+def sample(n, m, seed= 0):
+    """yields `m` samples from `n` nats."""
+    assert 0 < m <= n
+    data = np.arange(n)
+    while True:
+        np.random.seed(seed)
+        np.random.shuffle(data)
+        yield from (data[i:j] for i, j in partition(n, m))

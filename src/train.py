@@ -4,6 +4,9 @@
 trial      = 'm'
 len_cap    = 2**8
 batch_size = 2**6
+valid_size = batch_size * 4
+summ_size  = valid_size * 4
+step_summ  = 2**8
 ckpt       = None
 
 
@@ -12,8 +15,8 @@ from os.path import expanduser, join
 from tqdm import tqdm
 from util import PointedIndex
 from util_io import encode, decode, save
-from util_np import np
-from util_tf import tf, batch
+from util_np import np, partition, sample
+from util_tf import tf, pipe
 
 logdir = expanduser("~/cache/tensorboard-logdir/eti")
 tf.set_random_seed(0)
@@ -43,9 +46,14 @@ assert tgt_valid.shape[1] <= len_cap
 # build model #
 ###############
 
+def batch(src, tgt, size= batch_size, dtype= tf.uint8):
+    return pipe(
+        lambda: ((src[bat], tgt[bat]) for bat in sample(len(src), size))
+        , (dtype, dtype))
+
 model = Transformer.new()
-valid = model.data(*batch((src_valid, tgt_valid), batch_size), len_cap).build(trainable= False)
-train = model.data(*batch((src_train, tgt_train), batch_size), len_cap).build().train()
+valid = model.data(src_cap= len_cap).build(trainable= False)
+train = model.data(*batch(src_train, tgt_train), len_cap).build().train()
 
 idx_src = PointedIndex(np.load("../trial/data/index_src.npy").item())
 idx_tgt = PointedIndex(np.load("../trial/data/index_tgt.npy").item())
@@ -54,9 +62,8 @@ def trans(s, m= valid, idx_src= idx_src, idx_tgt= idx_tgt):
     src = np.array(encode(idx_src, s)).reshape(1, -1)
     return decode(idx_tgt, m.pred.eval({m.src: src})[0])
 
-def trans_valid(m= valid, src= src_valid, idx= idx_tgt, batch_size= batch_size):
-    rng = range(0, len(src) + batch_size, batch_size)
-    for i, j in zip(rng, rng[1:]):
+def trans_valid(m= valid, src= src_valid, idx= idx_tgt, batch_size= valid_size):
+    for i, j in partition(len(src), batch_size, discard= False):
         for p in m.pred.eval({m.src_: src[i:j]}):
             yield decode(idx, p)
 
@@ -67,22 +74,28 @@ def trans_valid(m= valid, src= src_valid, idx= idx_tgt, batch_size= batch_size):
 saver = tf.train.Saver()
 sess = tf.InteractiveSession()
 wtr = tf.summary.FileWriter(join(logdir, "{}".format(trial)))
-
 if ckpt:
     saver.restore(sess, "../trial/model/{}{}".format(trial, ckpt))
 else:
     tf.global_variables_initializer().run()
 
-step_eval = 32
-summ = tf.summary.merge(
-    (tf.summary.scalar('step_loss', valid.loss)
-     , tf.summary.scalar('step_acc', valid.acc)))
+def summ(m= valid
+         , src= src_valid[:summ_size]
+         , tgt= tgt_valid[:summ_size]
+         , batch_size= valid_size
+         , summary= tf.summary.merge(
+             (tf.summary.scalar('step_loss', valid.loss)
+              , tf.summary.scalar('step_acc', valid.acc)))):
+    loss, acc = zip(*(
+        sess.run((m.loss, m.acc), {m.src_: src[i:j], m.tgt_: tgt[i:j]})
+        for i, j in partition(len(src), batch_size, discard= False)))
+    return sess.run(summary, {m.loss: np.mean(loss), m.acc: np.mean(acc)})
 
 while True:
-    for _ in range(len(src_train) // batch_size // step_eval):
-        for _ in tqdm(range(step_eval), ncols= 70):
+    for _ in range(len(src_train) // batch_size // step_summ):
+        for _ in tqdm(range(step_summ), ncols= 70):
             sess.run(train.up)
         step = sess.run(train.step)
-        wtr.add_summary(sess.run(summ), step)
+        wtr.add_summary(summ(), step)
     saver.save(sess, "../trial/model/{}{}".format(trial, step), write_meta_graph= False)
     save("../trial/pred/{}{}".format(trial, step), trans_valid())

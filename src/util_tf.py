@@ -1,5 +1,5 @@
 from copy import copy
-from util import Record, identity
+from util import Record
 import tensorflow as tf
 
 
@@ -10,16 +10,12 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     wtr.add_run_metadata(meta, tag)
 
 
-def batch(data, batch_size, shuffle= 1e4, repeat= True, fn= None, prefetch= 16, name= 'batch'):
-    """returns a tensorflow dataset iterator from `data`."""
-    with tf.variable_scope(name):
-        ds = tf.data.Dataset.from_tensor_slices(data)
-        if shuffle: ds = ds.shuffle(int(shuffle))
-        if repeat:  ds = ds.repeat()
-        ds = ds.batch(batch_size)
-        if fn: ds = ds.map(fn)
-        if prefetch: ds = ds.prefetch(prefetch)
-        return ds.make_one_shot_iterator().get_next()
+def pipe(*args, **kwargs):
+    """see `tf.data.Dataset.from_generator`."""
+    return tf.data.Dataset.from_generator(*args, **kwargs) \
+                          .prefetch(1) \
+                          .make_one_shot_iterator() \
+                          .get_next()
 
 
 def placeholder(dtype, shape, x= None, name= None):

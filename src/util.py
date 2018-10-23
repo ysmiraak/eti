@@ -12,11 +12,6 @@ def comp(g, f, *fs):
     return lambda x: g(f(x))
 
 
-def get(k):
-    """k -> (k -> v) -> v"""
-    return lambda d: d[k]
-
-
 def diter(xs, depth= 2):
     """like `iter` but yields items at `depth`."""
     if depth:
