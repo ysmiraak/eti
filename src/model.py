@@ -4,7 +4,7 @@ from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Affine,
 import numpy as np
 
 
-def sinusoid(time, dim, freq= 1e-4, name= 'sinusoid', scale= True, array= False):
+def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
     """returns a rank-2 tensor of shape `time, dim`, where each row
     corresponds to a time step and each column a sinusoid, with
     frequencies in a geometric progression from 1 to `freq`.
@@ -16,7 +16,7 @@ def sinusoid(time, dim, freq= 1e-4, name= 'sinusoid', scale= True, array= False)
         s = np.concatenate((np.sin(a), np.cos(a)), -1).reshape(dim, time)
         if scale: s *= dim ** -0.5
         return s.T
-    with tf.variable_scope(name):
+    else:
         a = tf.reshape(
             freq ** ((2 / dim) * tf.range(dim // 2, dtype= tf.float32))
             , (-1, 1)) @ tf.reshape(
@@ -31,9 +31,8 @@ class Sinusoid(Record):
 
     def __init__(self, dim, len_cap= None, name= 'sinusoid'):
         self.dim, self.name = dim, name
-        self.pos = tf.constant(
-            sinusoid(len_cap, dim, array= True), tf.float32, name= name
-        ) if len_cap else None
+        with tf.variable_scope(name):
+            self.pos = tf.constant(sinusoid(len_cap, dim, array= True), tf.float32) if len_cap else None
 
     def __call__(self, time, name= None):
         with tf.variable_scope(name or self.name):
