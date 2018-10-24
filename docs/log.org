@@ -1,0 +1,25 @@
+* todo
+
+** use the data on the server
+
+~/data/wmt/de-en
+
+update data pipeline
+
+move path related stuff from `trial` to `util_io`
+
+** try use emb_pos as position encoding
+
+probably doesn't make sense
+but it may help coordinating tgt and src
+
+** try without dropout on emb_pos
+
+when and where should we apply dropout?
+
+** try without masking current step
+
+if the other steps offer no valuable info,
+current step should simply trust in itself.
+
+may be the cause for indecisiveness of middle steps?

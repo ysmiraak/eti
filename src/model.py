@@ -157,12 +157,10 @@ class Transformer(Record):
             dropout = smooth = identity
         # encoder input is source embedding + position encoding
         # dropout only the trained embedding
-        # todo try use emb_pos as position encoding
         with tf.variable_scope('.emb_src'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
         # decoder input is trained position embedding only
-        # todo try without dropout
         with tf.variable_scope('.emb_pos'):
             x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
         # source mask disables current step and padding steps
