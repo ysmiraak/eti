@@ -37,17 +37,14 @@ def vocab(xs, specials= "\xa0\n", min_freq= 2, top= 256):
     return vocab[:top] if top else vocab
 
 
-def encode(index, sent, end= None, start= None):
+def encode(index, sent, pad_end= (), pad_start= ()):
     """-> list int
 
-    encodes `sent : seq str` according to `index : PointedIndex`.
-
-    ensures that it starts with `start` and ends with `end`.
+    encodes chained `pad_start, sent, pad_end : seq str` according to
+    `index : PointedIndex`.
 
     """
-    end   = () if end   is None else (end,)
-    start = () if start is None else (start,)
-    return list(map(index, chain(start, sent, end)))
+    return list(map(index, chain(pad_start, sent, pad_end)))
 
 
 def decode(index, idxs, end= "\n", sep= ""):

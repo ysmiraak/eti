@@ -54,7 +54,8 @@ tgt_index = PointedIndex(np.load(pform(P.data, P.index_tgt, '.npy')).item())
 
 def trans(s, m= valid, idx_src= src_index, idx_tgt= tgt_index):
     src = np.array(encode(idx_src, s)).reshape(1, -1)
-    return decode(idx_tgt, m.pred.eval({m.src_: src})[0])
+    tgt = m.pred.eval({m.src_: src})
+    return decode(idx_tgt, tgt[0])
 
 def trans_valid(m= valid, src= src_valid, idx= tgt_index, bat= C.valid_batch):
     for i, j in partition(len(src), bat, discard= False):
