@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from collections import Counter
 from util import diter
 from util_io import load

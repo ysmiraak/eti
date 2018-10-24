@@ -29,10 +29,10 @@ def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
 
 class Sinusoid(Record):
 
-    def __init__(self, dim, len_cap= None, name= 'sinusoid'):
+    def __init__(self, dim, cap= None, name= 'sinusoid'):
         self.dim, self.name = dim, name
         with tf.variable_scope(name):
-            self.pos = tf.constant(sinusoid(len_cap, dim, array= True), tf.float32) if len_cap else None
+            self.pos = tf.constant(sinusoid(cap, dim, array= True), tf.float32) if cap else None
 
     def __call__(self, time, name= None):
         with tf.variable_scope(name or self.name):
@@ -62,20 +62,18 @@ class AttentionBlock(Record):
 class Transformer(Record):
     """-> Record
 
-    model = Transformer.new()
-    train = model.data(src_train, tgt_train, src_cap).build().train()
-    valid = model.data(src_valid, tgt_valid).build(trainable= False)
+    model = Transformer.new( ... )
+    train = model.data( ... ).build().train()
+    valid = model.data( ... ).build(trainable= False)
 
     """
+    _new   = 'dim', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap_tgt'
+    _data  = 'cap_src',
+    _build = 'dropout', 'smooth'
+    _train = 'warmup', 'beta1', 'beta2', 'epsilon'
 
     @staticmethod
-    def new(dim= 256
-            , dim_mid= 512
-            , num_layer= 2
-            , dim_src= 256
-            , dim_tgt= 256
-            , tgt_cap= 256
-            , act= tf.nn.relu):
+    def new(dim, dim_mid, depth, dim_src, dim_tgt, cap_tgt, act= tf.nn.relu):
         """-> Transformer with fields
 
         mask_tgt : f32 (1, t, t)
@@ -89,20 +87,20 @@ class Transformer(Record):
         """
         assert not dim % 2
         with tf.variable_scope('encode'):
-            encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
+            encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(tgt_cap), 0))
-            decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(num_layer))
+            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap_tgt), 0))
+            decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
             mask_tgt= mask_tgt
             , emb_src= Linear(dim, dim_src, 'emb_src')
-            , emb_pos= Linear(dim, tgt_cap, 'emb_pos')
+            , emb_pos= Linear(dim, cap_tgt, 'emb_pos')
             , encode= encode
             , decode= decode
             , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
             , logit= Affine(dim_tgt, dim, 'logit'))
 
-    def data(self, src= None, tgt= None, src_cap= None, end= 1):
+    def data(self, src= None, tgt= None, cap_src= None, end= 1):
         """-> Transformer with new fields
 
              src : i32 (b, s)    source with `end` trimmed among the batch
@@ -112,7 +110,7 @@ class Transformer(Record):
         mask_src : f32 (b, s, s) source mask
         position : Sinusoid
 
-        setting `src_cap` makes it more efficient for training.  you
+        setting `cap_src` makes it more efficient for training.  you
         won't be able to feed it longer sequences, but it doesn't
         affect any model parameters.
 
@@ -133,7 +131,7 @@ class Transformer(Record):
             , tgt_= tgt_
             , mask= mask
             , mask_src= mask_src
-            , position= Sinusoid(int(self.logit.kern.shape[0]), src_cap)
+            , position= Sinusoid(int(self.logit.kern.shape[0]), cap_src)
             , **self)
 
     def build(self, trainable= True, dropout= 0.1, smooth= 0.1):
@@ -164,6 +162,7 @@ class Transformer(Record):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
         # decoder input is trained position embedding only
+        # todo try without dropout
         with tf.variable_scope('.emb_pos'):
             x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
         # source mask disables current step and padding steps
