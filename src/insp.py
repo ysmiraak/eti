@@ -3,8 +3,7 @@
 from model import Transformer as T
 from trial import pform, path as P, config as C
 from util import partial, select, PointedIndex
-from util_io import encode, decode
-from util_np import np
+from util_np import np, encode, decode
 from util_tf import tf
 import matplotlib.pyplot as plt
 

@@ -4,8 +4,8 @@ from model import Transformer as T
 from tqdm import tqdm
 from trial import pform, path as P, config as C
 from util import select, PointedIndex
-from util_io import encode, decode, save
-from util_np import np, partition, sample
+from util_io import save
+from util_np import np, partition, sample, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(0)
 

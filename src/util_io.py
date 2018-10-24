@@ -35,29 +35,3 @@ def vocab(xs, specials= "\xa0\n", min_freq= 2, top= 256):
     vocab = list(specials)
     vocab.extend((x for _, x in freq))
     return vocab[:top] if top else vocab
-
-
-def encode(index, sent, pad_end= (), pad_start= ()):
-    """-> list int
-
-    encodes chained `pad_start, sent, pad_end : seq str` according to
-    `index : PointedIndex`.
-
-    """
-    return list(map(index, chain(pad_start, sent, pad_end)))
-
-
-def decode(index, idxs, end= "\n", sep= ""):
-    """-> str
-
-    decodes `idxs : seq int` according to `index : PointedIndex`.
-
-    stops at `end` and joins the results with `sep`.
-
-    """
-    end = index(end)
-    tgt = []
-    for idx in idxs:
-        if idx == end: break
-        tgt.append(index[idx])
-    return sep.join(tgt)
