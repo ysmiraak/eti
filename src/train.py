@@ -2,10 +2,10 @@
 
 from model import Transformer as T, infer, translate
 from tqdm import tqdm
-from trial import pform, path as P, config as C
+from trial import config as C
 from util import partial, select, PointedIndex
-from util_io import sieve, load_wmt, load_pkl, save_txt
-from util_np import np, partition, batch, encode, decode
+from util_io import path as P, pform, sieve, load_txt, load_pkl, save_txt
+from util_np import np, batch, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
@@ -13,20 +13,20 @@ tf.set_random_seed(C.seed)
 # load data #
 #############
 
-src_valid = np.load("../trial/data/src.npy")
-tgt_valid = np.load("../trial/data/tgt.npy")
-index = PointedIndex(load_pkl("../trial/data/idx.pkl"))
+src_valid = np.load(pform(P.data, P.src))
+tgt_valid = np.load(pform(P.data, P.tgt))
+index = PointedIndex(load_pkl(pform(P.data, P.idx)))
 enc = partial(encode, index, dtype= np.uint8)
 dec = partial(decode, index)
 
-def batch_load(path= "/data/wmt/de-en/corpus"
+def batch_load(path= pform(P.wmt, "corpus")
                , enc= enc
                , cap_src= C.cap_src
                , cap_tgt= C.cap_tgt
-               , len_bat= C.train_batch
+               , len_bat= C.batch_train
                , shuffle= C.shuffle
                , seed= C.seed):
-    for src_tgt in batch(sieve(load_wmt(path), cap_src, cap_tgt), len_bat, shuffle, seed):
+    for src_tgt in batch(sieve(load_txt(path), cap_src, cap_tgt), len_bat, shuffle, seed):
         src, tgt = zip(*src_tgt)
         yield enc(src), enc(tgt, cap_tgt)
 
@@ -36,10 +36,10 @@ def batch_load(path= "/data/wmt/de-en/corpus"
 
 model = T.new(**select(C, *T._new))
 valid = model.data(**select(C, *T._data)).build(trainable= False)
-trans = partial(translate, model= valid, index= index, batch= C.valid_batch)
+trans = partial(translate, model= valid, index= index, batch= C.batch_valid)
 
 # # for profiling
-# m, src, tgt = valid, src_valid[:C.valid_batch], tgt_valid[:C.valid_batch]
+# m, src, tgt = valid, src_valid[:C.batch_valid], tgt_valid[:C.batch_valid]
 # from util_tf import profile
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()
@@ -73,9 +73,9 @@ def summ(step):
         sess= sess
         , model= valid
         , fetches= (valid.loss, valid.acc)
-        , src= src_valid[:C.valid_total]
-        , tgt= tgt_valid[:C.valid_total]
-        , batch= C.valid_batch)))
+        , src= src_valid
+        , tgt= tgt_valid
+        , batch= C.batch_valid)))
     wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
 
 def save(step):

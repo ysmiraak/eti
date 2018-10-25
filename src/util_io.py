@@ -1,6 +1,26 @@
 from collections import Counter
+from os.path import expanduser, join
+from util import Record
 import pickle
 import re
+
+
+path = Record(
+    log = expanduser("~/cache/tensorboard-logdir/eti")
+    , wmt = expanduser("~/data/wmt/de-en")
+    , pred = "../trial/pred"
+    , ckpt = "../trial/ckpt"
+    , data = "../trial/data"
+    , voc = "voc.tsv"
+    , idx = "idx.pkl"
+    , src = "src.npy"
+    , tgt = "tgt.npy"
+)
+
+
+def pform(path, *names, sep= ''):
+    """format a path as `path` followed by `names` joined with `sep`."""
+    return join(path, sep.join(map(str, names)))
 
 
 def clean(s, p= re.compile(r"&#91;|&#93;|&amp;|&apos;|&gt;|&lt;|&quot;|@-@|� s")
@@ -17,10 +37,11 @@ def clean(s, p= re.compile(r"&#91;|&#93;|&amp;|&apos;|&gt;|&lt;|&quot;|@-@|� s
     return p.sub(tr, s)
 
 
-def sieve(src_tgt, cap_src, cap_tgt):
-    for src, tgt in src_tgt:
-        src = clean(src)
-        tgt = clean(tgt)
+def sieve(lines, cap_src, cap_tgt):
+    for line in lines:
+        src, tgt, _ = clean(line).split("\t")
+        src = " ".join(src.split())
+        tgt = " ".join(tgt.split())
         if not src or not tgt \
            or cap_src < len(src) \
            or cap_tgt < len(tgt):
@@ -28,15 +49,10 @@ def sieve(src_tgt, cap_src, cap_tgt):
         yield src, tgt
 
 
-def load_wmt(filename):
-    with open(filename) as lines:
-        yield from (line.split("\t")[0:2] for line in lines)
-
-
 def load_txt(filename):
     """yields lines from text file."""
     with open(filename) as file:
-        yield from (line.strip() for line in file)
+        yield from (line for line in file)
 
 
 def save_txt(filename, lines):
@@ -58,7 +74,7 @@ def save_pkl(filename, obj):
         pickle.dump(obj, dump)
 
 
-def vocab(xs, specials= "\xa0\n", min_freq= 2, top= 256):
+def vocab(xs, specials= "\xa0\n ", min_freq= 2, top= 256):
     """-> (list a) where
 
     xs       : seq a

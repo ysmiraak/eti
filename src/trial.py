@@ -1,24 +1,4 @@
-from os.path import expanduser, join
 from util import Record
-
-
-path = Record(
-    log = expanduser('~/cache/tensorboard-logdir/eti')
-    , pred = '../trial/pred'
-    , ckpt = '../trial/ckpt'
-    , data = '../trial/data'
-    , index_src = 'index_src'
-    , index_tgt = 'index_tgt'
-    , train_src = 'train_src'
-    , train_tgt = 'train_tgt'
-    , valid_src = 'valid_src'
-    , valid_tgt = 'valid_tgt'
-)
-
-
-def pform(path, *names, sep= ''):
-    """format a path as `path` followed by `names` joined with `sep`."""
-    return join(path, sep.join(map(str, names)))
 
 
 master = Record(
@@ -47,12 +27,10 @@ master = Record(
     ### training schedule
     , shuffle = 2**14
     # batch size for training
-    , train_batch = 64
+    , batch_train = 64
+    # batch size for validation
+    , batch_valid = 512
 )
-# batch size for validation
-master.valid_batch = master.train_batch * 8
-# number of validation instances for summary
-master.valid_total = master.valid_batch * 4
 
 
 wide = Record(master, dim= 512, dim_mid= 1024)
