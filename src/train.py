@@ -57,18 +57,15 @@ train = model.data(src= src_train, tgt= tgt_train, **select(C, *T._data)) \
 
 sess = tf.InteractiveSession()
 saver = tf.train.Saver()
-
 if C.ckpt:
     saver.restore(sess, pform(P.ckpt, C.trial, C.ckpt))
 else:
     tf.global_variables_initializer().run()
 
-wtr = tf.summary.FileWriter(pform(P.log, C.trial))
-summary = tf.summary.merge(
-    (tf.summary.scalar('step_loss', valid.loss)
-     , tf.summary.scalar('step_acc', valid.acc)))
-
-def summ(step):
+def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
+         , summary = tf.summary.merge(
+             (tf.summary.scalar('step_loss', valid.loss)
+              , tf.summary.scalar('step_acc', valid.acc)))):
     loss, acc = map(np.mean, zip(*infer(
         sess= sess
         , model= valid
@@ -78,16 +75,11 @@ def summ(step):
         , batch= C.batch_valid)))
     wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
 
-def save(step):
-    saver.save(sess, pform(P.ckpt, C.trial, step), write_meta_graph= False)
-    save_txt(pform(P.pred, C.trial, step), trans(sess, src_valid))
-
-try:
+for _ in range(9):
     for _ in range(200):
         for _ in tqdm(range(500), ncols= 70):
             sess.run(train.up)
         step = sess.run(train.step)
         summ(step)
-    save(step // 100000)
-except tf.errors.OutOfRangeError:
-    save(step)
+    saver.save(sess, pform(P.ckpt, C.trial, step // 100000), write_meta_graph= False)
+    save_txt(pform(P.pred, C.trial, step // 100000), trans(sess, src_valid))

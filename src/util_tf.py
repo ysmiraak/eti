@@ -14,6 +14,7 @@ def pipe(*args, prefetch= 1, name= 'pipe', **kwargs):
     """see `tf.data.Dataset.from_generator`."""
     with tf.variable_scope(name):
         return tf.data.Dataset.from_generator(*args, **kwargs) \
+                              .repeat() \
                               .prefetch(prefetch) \
                               .make_one_shot_iterator() \
                               .get_next()
