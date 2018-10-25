@@ -1,3 +1,14 @@
+* trial
+
+** n
+
+without masking current step
+
+if the other steps offer no valuable info,
+current step should simply trust in itself.
+
+may be the cause for indecisiveness of middle steps?
+
 * todo
 
 ** use the data on the server
@@ -17,9 +28,6 @@ but it may help coordinating tgt and src
 
 when and where should we apply dropout?
 
-** try without masking current step
+** try convolution instead of self-attention
 
-if the other steps offer no valuable info,
-current step should simply trust in itself.
-
-may be the cause for indecisiveness of middle steps?
+or both
