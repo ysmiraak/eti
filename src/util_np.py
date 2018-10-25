@@ -33,28 +33,26 @@ def sample(n, m, seed= 0):
         yield from (data[i:j] for i, j in partition(n, m))
 
 
-def decode(index, idxs, sep= "", end= "\n"):
+def decode(index, array, sep= "", end= "\n"):
     """-> list str
 
-    decodes `idxs : array int` according to `index : PointedIndex`.
-    stops at `end` and joins the results with `sep`.  if `idxs` has a
+    decodes `array : array int` according to `index : PointedIndex`.
+    stops at `end` and joins the results with `sep`.  if `array` has a
     higher rank, generates the results instead.
 
     """
-    if 1 < idxs.ndim: return (decode(index, xs, end, sep) for xs in idxs)
-    return sep.join([index[i] for i in idxs[:np.argmax(idxs == index(end))]])
+    if 1 < array.ndim: return (decode(index, arr, sep, end) for arr in array)
+    return sep.join([index[i] for i in array[:np.argmax(array == index(end))]])
 
 
-def encode(index, sent, length= None, dtype= np.uint8, pad= "\n"):
+def encode(index, sents, length= None, dtype= np.int, pad= "\n"):
     """-> array dtype
 
-    encodes `sent : seq seq str | seq str` according to `index :
-    PointedIndex`.  always returns a rank 2 array.  the second axis
-    will be padded to `length` or the maximum length.
+    encodes `sents : seq seq str` according to `index : PointedIndex`.
+    returns a rank 2 array whose second axis is be padded to `length`
+    or the maximum length.
 
     """
-    if not hasattr(sent, '__len__'): sent = list(sent)
-    if isinstance(sent[0], str): sent = sent,
-    sent = [np.fromiter(map(index, s), dtype) for s in sent]
-    if length is None: length = max(map(len, sent))
-    return vpack(sent, (len(sent), length), index(pad), dtype)
+    sents = [np.fromiter(map(index, sent), dtype) for sent in sents]
+    if length is None: length = max(map(len, sents))
+    return vpack(sents, (len(sents), length), index(pad), dtype)

@@ -1,7 +1,7 @@
 from util import Record, identity
+from util_np import np, partition, encode, decode
 from util_tf import QueryAttention as Attention
 from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Affine, Multilayer
-import numpy as np
 
 
 def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
@@ -201,10 +201,17 @@ class Transformer(Record):
         return Transformer(step= s, lr= lr, up= up, **self)
 
 
-# def trans(s, m= valid, idx= index):
-#     return decode(idx, m.pred.eval({m.src_: enc([s])})[0])
+def infer(model, fetches, src, tgt= None, batch= None):
+    if batch is None: batch = len(src)
+    for i, j in partition(len(src), batch, discard= False):
+        feed = {model.src_: src[i:j]}
+        if tgt is not None:
+            feed[model.tgt_] = tgt[i:j]
+        yield sess.run(fetches, feed)
 
-# def trans_valid(m= valid, src= src_valid, bat= C.valid_batch):
-#     for i, j in partition(len(src), bat, discard= False):
-#         for p in dec(m.pred.eval({m.src_: src[i:j]})):
-#             yield p
+
+def translate(sents, index, model, dtype= np.uint8, batch= None):
+    if not isinstance(sents, np.ndarray):
+        sents = encode(index, sents, dtype= dtype)
+    for preds in infer(model, model.pred, src= sents, batch= batch):
+        yield from decode(index, preds)

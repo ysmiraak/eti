@@ -48,8 +48,6 @@ master = Record(
     , shuffle = 2**14
     # batch size for training
     , train_batch = 64
-    # interval between training steps for validation
-    , valid_inter = 258
 )
 # batch size for validation
 master.valid_batch = master.train_batch * 8

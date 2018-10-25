@@ -20,12 +20,13 @@ alphabet = Counter(diter(corp))
 
 print(len(alphabet), "characters")
 
-
-
+#####################
+# big training data #
+#####################
 
 from collections import Counter
 from trial import config as C
-from util_io import clean_load
+from util_io import sieve
 import numpy as np
 
 vocab, count = Counter(), 0
@@ -55,3 +56,27 @@ for w, n in vocab.items():
 index = "".join(chars(alphabet, specials= "\xa0\n "))
 save_pkl("../trial/data/index", index)
 index = load_pkl("../trial/data/index")
+
+###################
+# validation data #
+###################
+
+from util_io import load_pkl
+from util import PointedIndex
+index = PointedIndex(load_pkl("../trial/data/index"))
+
+with open("/data/wmt/de-en/dev/newstest2017.tc.de") as src, \
+     open("/data/wmt/de-en/dev/newstest2017.tc.en") as tgt:
+    src_tgt = list(sieve(zip(src, tgt), C.cap_src, C.cap_tgt))
+
+import random
+random.seed(C.seed)
+random.shuffle(src_tgt)
+
+src, tgt = zip(*src_tgt)
+
+from util import partial
+from util_np import encode
+
+np.save("../trial/data/source.npy", encode(index, src, dtype= np.uint8))
+np.save("../trial/data/target.npy", encode(index, tgt, C.cap_tgt, dtype= np.uint8))
