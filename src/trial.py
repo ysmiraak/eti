@@ -23,7 +23,7 @@ def pform(path, *names, sep= ''):
 
 master = Record(
     trial  = 'm'
-    , ckpt = 875520
+    , ckpt = None
     ### model spec
     , dim_src = 256
     , dim_tgt = 256
@@ -59,4 +59,4 @@ wide = Record(master, dim= 512, dim_mid= 1024)
 deep = Record(master, depth= 4)
 
 
-config = Record(master, trial= 'm')
+config = Record(master, trial= 'm', ckpt= 875520)
