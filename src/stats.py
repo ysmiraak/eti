@@ -53,5 +53,5 @@ for w, n in vocab.items():
     alphabet.update({c: n for c in w})
 
 index = "".join(chars(alphabet, specials= "\xa0\n "))
-save_pkl("../trial/data/index.pickle", index)
-index = load_pkl("../trial/data/index.pickle")
+save_pkl("../trial/data/index", index)
+index = load_pkl("../trial/data/index")

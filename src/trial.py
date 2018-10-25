@@ -24,6 +24,7 @@ def pform(path, *names, sep= ''):
 master = Record(
     trial  = 'm'
     , ckpt = None
+    , seed = 0
     ### model spec
     , dim_src = 256
     , dim_tgt = 256
@@ -44,6 +45,7 @@ master = Record(
     , beta2   = 0.98
     , epsilon = 1e-9
     ### training schedule
+    , shuffle = 2**14
     # batch size for training
     , train_batch = 64
     # interval between training steps for validation

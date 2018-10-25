@@ -199,3 +199,12 @@ class Transformer(Record):
             lr = (d ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
         up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
         return Transformer(step= s, lr= lr, up= up, **self)
+
+
+# def trans(s, m= valid, idx= index):
+#     return decode(idx, m.pred.eval({m.src_: enc([s])})[0])
+
+# def trans_valid(m= valid, src= src_valid, bat= C.valid_batch):
+#     for i, j in partition(len(src), bat, discard= False):
+#         for p in dec(m.pred.eval({m.src_: src[i:j]})):
+#             yield p

@@ -1,6 +1,8 @@
 from collections import Counter
 from itertools import chain
+from itertools import islice
 import pickle
+import random
 import re
 
 
@@ -27,6 +29,19 @@ def clean_load(filename, cap_src, cap_tgt):
                or cap_tgt < len(t):
                 continue
             yield s, t
+
+
+def batch_load(filename, cap_src, cap_tgt, len_bat, shuffle= 2**14, seed= 0):
+    assert not shuffle % len_bat
+    corpus = clean_load(filename, cap_src, cap_tgt)
+    while True:
+        buf = list(islice(corpus, shuffle))
+        if not buf: break
+        random.seed(seed)
+        random.shuffle(buf)
+        for i, j in partition(shuffle, len_bat):
+            src, tgt = zip(*buf[i:j])
+            yield src, tgt
 
 
 def load_txt(filename):
