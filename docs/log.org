@@ -7,17 +7,27 @@ without masking current step
 if the other steps offer no valuable info,
 current step should simply trust in itself.
 
-may be the cause for indecisiveness of middle steps?
+*** conclusion
 
-* todo
+the mask is useful
 
-** use the data on the server
+the model does not learn as well without the mask
+
+** o
+
+use the big dataset of the server
+
+updated data pipeline, things might break
 
 ~/data/wmt/de-en
 
-update data pipeline
+* todo
+
+finish updating code for the old data
 
 move path related stuff from `trial` to `util_io`
+
+investigate the cause for indecisiveness of middle steps
 
 ** try use emb_pos as position encoding
 
