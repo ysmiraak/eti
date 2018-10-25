@@ -4,8 +4,8 @@ from model import Transformer as T, infer, translate
 from tqdm import tqdm
 from trial import pform, path as P, config as C
 from util import partial, select, PointedIndex
-from util_io import sieve, batch, load_wmt, load_pkl, save_txt
-from util_np import np, partition, encode, decode
+from util_io import sieve, load_wmt, load_pkl, save_txt
+from util_np import np, partition, batch, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
@@ -13,9 +13,9 @@ tf.set_random_seed(C.seed)
 # load data #
 #############
 
-src_valid = np.load("../trial/data/source.npy")
-tgt_valid = np.load("../trial/data/target.npy")
-index = PointedIndex(load_pkl("../trial/data/index"))
+src_valid = np.load("../trial/data/src.npy")
+tgt_valid = np.load("../trial/data/tgt.npy")
+index = PointedIndex(load_pkl("../trial/data/idx.pkl"))
 enc = partial(encode, index, dtype= np.uint8)
 dec = partial(decode, index)
 
@@ -26,8 +26,8 @@ def batch_load(path= "/data/wmt/de-en/corpus"
                , len_bat= C.train_batch
                , shuffle= C.shuffle
                , seed= C.seed):
-    for src, tgt in batch(sieve(load_wmt(path), cap_src, cap_tgt), len_bat, shuffle, seed):
-        # currently tgt must always be as long as cap_tgt but src can be shorter
+    for src_tgt in batch(sieve(load_wmt(path), cap_src, cap_tgt), len_bat, shuffle, seed):
+        src, tgt = zip(*src_tgt)
         yield enc(src), enc(tgt, cap_tgt)
 
 ###############
@@ -70,16 +70,17 @@ summary = tf.summary.merge(
 
 def summ(step):
     loss, acc = map(np.mean, zip(*infer(
-        model= valid
+        sess= sess
+        , model= valid
         , fetches= (valid.loss, valid.acc)
         , src= src_valid[:C.valid_total]
         , tgt= tgt_valid[:C.valid_total]
         , batch= C.valid_batch)))
-    wtr.add_summary(sess.run(summary, {m.loss: loss, m.acc: acc}), step)
+    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
 
 def save(step):
     saver.save(sess, pform(P.ckpt, C.trial, step), write_meta_graph= False)
-    save_txt(pform(P.pred, C.trial, step), trans(src))
+    save_txt(pform(P.pred, C.trial, step), trans(sess, src_valid))
 
 try:
     for _ in range(200):

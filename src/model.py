@@ -201,7 +201,7 @@ class Transformer(Record):
         return Transformer(step= s, lr= lr, up= up, **self)
 
 
-def infer(model, fetches, src, tgt= None, batch= None):
+def infer(sess, model, fetches, src, tgt= None, batch= None):
     if batch is None: batch = len(src)
     for i, j in partition(len(src), batch, discard= False):
         feed = {model.src_: src[i:j]}
@@ -210,8 +210,8 @@ def infer(model, fetches, src, tgt= None, batch= None):
         yield sess.run(fetches, feed)
 
 
-def translate(sents, index, model, dtype= np.uint8, batch= None):
+def translate(sess, sents, index, model, dtype= np.uint8, batch= None):
     if not isinstance(sents, np.ndarray):
         sents = encode(index, sents, dtype= dtype)
-    for preds in infer(model, model.pred, src= sents, batch= batch):
+    for preds in infer(sess, model, model.pred, src= sents, batch= batch):
         yield from decode(index, preds)

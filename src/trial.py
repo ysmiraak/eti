@@ -59,4 +59,4 @@ wide = Record(master, dim= 512, dim_mid= 1024)
 deep = Record(master, depth= 4)
 
 
-config = Record(master, trial= 'm', ckpt= 875520)
+config = Record(master, trial= 'o', ckpt= None)

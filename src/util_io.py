@@ -1,8 +1,5 @@
 from collections import Counter
-from itertools import chain
-from itertools import islice
 import pickle
-import random
 import re
 
 
@@ -29,16 +26,6 @@ def sieve(src_tgt, cap_src, cap_tgt):
            or cap_tgt < len(tgt):
             continue
         yield src, tgt
-
-
-def batch(src_tgt, len_bat, shuffle= 2**14, seed= 0):
-    assert not shuffle % len_bat
-    while True:
-        buf = list(islice(src_tgt, shuffle))
-        if not buf: break
-        random.seed(seed)
-        random.shuffle(buf)
-        yield from (zip(*buf[i:j]) for i, j in partition(shuffle, len_bat))
 
 
 def load_wmt(filename):

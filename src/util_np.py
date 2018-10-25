@@ -1,3 +1,5 @@
+from itertools import islice, takewhile
+from util import identity
 import numpy as np
 
 
@@ -33,6 +35,17 @@ def sample(n, m, seed= 0):
         yield from (data[i:j] for i, j in partition(n, m))
 
 
+def batch(stream, len_bat, shuffle= 2**14, seed= 0, discard= False):
+    """yields batches from `stream`."""
+    assert not shuffle % len_bat
+    while True:
+        buf = list(islice(stream, shuffle))
+        if not buf: break
+        np.random.seed(seed)
+        np.random.shuffle(buf)
+        yield from (buf[i:j] for i, j in partition(shuffle, len_bat, discard= discard))
+
+
 def decode(index, array, sep= "", end= "\n"):
     """-> list str
 
@@ -42,7 +55,7 @@ def decode(index, array, sep= "", end= "\n"):
 
     """
     if 1 < array.ndim: return (decode(index, arr, sep, end) for arr in array)
-    return sep.join([index[i] for i in array[:np.argmax(array == index(end))]])
+    return sep.join([index[i] for i in array[:sum(takewhile(identity, array != index(end)))]])
 
 
 def encode(index, sents, length= None, dtype= np.int, pad= "\n"):
