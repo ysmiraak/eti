@@ -10,11 +10,11 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     wtr.add_run_metadata(meta, tag)
 
 
-def pipe(*args, prefetch= 1, name= 'pipe', **kwargs):
+def pipe(*args, prefetch= 1, repeat= -1, name= 'pipe', **kwargs):
     """see `tf.data.Dataset.from_generator`."""
     with tf.variable_scope(name):
         return tf.data.Dataset.from_generator(*args, **kwargs) \
-                              .repeat() \
+                              .repeat(repeat) \
                               .prefetch(prefetch) \
                               .make_one_shot_iterator() \
                               .get_next()

@@ -15,17 +15,9 @@ the model does not learn as well without the mask
 
 ** o
 
-use the big dataset of the server
-
-updated data pipeline, things might break
-
-~/data/wmt/de-en
+use the big dataset on the server /data/wmt/de-en
 
 * todo
-
-finish updating code for the old data
-
-move path related stuff from `trial` to `util_io`
 
 investigate the cause for indecisiveness of middle steps
 
