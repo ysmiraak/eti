@@ -28,7 +28,7 @@ def batch_load(path= pform(P.wmt, "corpus")
                , seed= C.seed):
     for src_tgt in batch(sieve(load_txt(path), cap_src, cap_tgt), len_bat, shuffle, seed):
         src, tgt = zip(*src_tgt)
-        yield enc(src), enc(tgt, cap_tgt)
+        yield enc(src, cap_src), enc(tgt, cap_tgt)
 
 ###############
 # build model #

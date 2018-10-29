@@ -88,16 +88,16 @@ class Transformer(Record):
         assert not dim % 2
         with tf.variable_scope('encode'):
             encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
-        with tf.variable_scope('decode'):
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap_tgt), 0))
-            decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+        # with tf.variable_scope('decode'):
+        #     mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap_tgt), 0))
+        #     decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
-            mask_tgt= mask_tgt
-            , emb_src= Linear(dim, dim_src, 'emb_src')
-            , emb_pos= Linear(dim, cap_tgt, 'emb_pos')
+            emb_src= Linear(dim, dim_src, 'emb_src')
+            # , mask_tgt= mask_tgt
+            # , emb_pos= Linear(dim, cap_tgt, 'emb_pos')
             , encode= encode
-            , decode= decode
-            , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
+            # , decode= decode
+            # , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
             , logit= Affine(dim_tgt, dim, 'logit'))
 
     def data(self, src= None, tgt= None, cap_src= None, end= 1):
@@ -119,17 +119,19 @@ class Transformer(Record):
             tgt_ = placeholder(tf.int32, (None, None), tgt)
         with tf.variable_scope('src'):
             src_ = placeholder(tf.int32, (None, None), src)
-            not_end = tf.to_float(tf.not_equal(src_, end))
-            len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_end, 0)))
-            not_end = tf.expand_dims(not_end[:,:len_src], 1)
-            mask_src = tf.log(not_end + tf.expand_dims(1 - tf.eye(len_src), 0))
-            mask = tf.log(not_end)
-            src = src_[:,:len_src]
+            # not_end = tf.to_float(tf.not_equal(src_, end))
+            # len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_end, 0)))
+            # not_end = tf.expand_dims(not_end[:,:len_src], 1)
+            # mask_src = tf.log(not_end + tf.expand_dims(1 - tf.eye(len_src), 0))
+            # mask = tf.log(not_end)
+            # src = src_[:,:len_src]
+            mask_src = tf.log(tf.expand_dims(1 - tf.eye(cap_src), 0))
         return Transformer(
-            src= src
+            # src= src
+            src= src_
             , src_= src_
             , tgt_= tgt_
-            , mask= mask
+            # , mask= mask
             , mask_src= mask_src
             , position= Sinusoid(int(self.logit.kern.shape[0]), cap_src)
             , **self)
@@ -160,17 +162,18 @@ class Transformer(Record):
         with tf.variable_scope('.emb_src'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-        # decoder input is trained position embedding only
-        with tf.variable_scope('.emb_pos'):
-            x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
+        # # decoder input is trained position embedding only
+        # with tf.variable_scope('.emb_pos'):
+        #     x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
         # source mask disables current step and padding steps
         with tf.variable_scope('.encode'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        # bridge mask disables padding steps in source
-        x = self.bridge(x, self.mask, dropout, w, '.bridge')
-        # target mask disables current step
-        with tf.variable_scope('.decode'):
-            for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
+        x = w
+        # # bridge mask disables padding steps in source
+        # x = self.bridge(x, self.mask, dropout, w, '.bridge')
+        # # target mask disables current step
+        # with tf.variable_scope('.decode'):
+        #     for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
         y = self.logit(x, '.logit')
         with tf.variable_scope('.prob'): prob = tf.nn.softmax(y)
         with tf.variable_scope('.pred'): pred = tf.argmax(y, -1, output_type= tf.int32)
