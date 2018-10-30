@@ -43,7 +43,7 @@ def batch(stream, len_bat, shuffle= 2**14, seed= 0, discard= False):
         if not buf: break
         np.random.seed(seed)
         np.random.shuffle(buf)
-        yield from (buf[i:j] for i, j in partition(shuffle, len_bat, discard= discard))
+        yield from (buf[i:j] for i, j in partition(len(buf), len_bat, discard= discard))
 
 
 def decode(index, array, sep= "", end= "\n"):
