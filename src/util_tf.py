@@ -37,25 +37,24 @@ def placeholder(dtype, shape, x= None, name= None):
 def normalize(x, axis= -1, eps= 1e-8, name= 'normalize'):
     """returns a tensor from `x` scaled and centered across `axis`."""
     with tf.variable_scope(name):
-        mean, var = tf.nn.moments(x, axis, keep_dims=True)
+        mean, var = tf.nn.moments(x, axis, keep_dims= True)
         return (x - mean) * tf.rsqrt(var + eps * eps)
 
 
 class Normalize(Record):
-    """layer normalization"""
+    """layer or batch normalization, depending on the `axis`"""
 
     def __init__(self, dim
                  , gain_initializer= tf.ones_initializer()
                  , bias_initializer= tf.zeros_initializer()
                  , name= 'normalize'):
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.gain = tf.get_variable('gain', dim, initializer= gain_initializer)
             self.bias = tf.get_variable('bias', dim, initializer= bias_initializer)
 
     def __call__(self, x, axis= -1, eps= 1e-8, name= None):
-        with tf.variable_scope(name or self.name):
-            return normalize(x, axis, eps) * self.gain + self.bias
+        return self.bias + self.gain * normalize(x, axis, eps)
 
 
 class Smooth(Record):
@@ -63,8 +62,8 @@ class Smooth(Record):
 
     def __init__(self, rate, dim= None, name= 'smooth'):
         self.dim = dim
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.rate = placeholder(tf.float32, (), rate, 'rate')
             self.shared = self.rate / (dim or 2)
             self.smooth = 1.0 - self.rate
@@ -86,8 +85,8 @@ class Dropout(Record):
 
     def __init__(self, rate, shape= None, name= 'dropout'):
         self.shape = shape
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.rate = placeholder(tf.float32, (), rate, 'rate')
             self.keep = 1.0 - self.rate
 
@@ -102,7 +101,8 @@ class Dropout(Record):
 class Maxout(Record):
 
     def __init__(self, k, name= 'maxout'):
-        self.k, self.name = k, name
+        self.k = k
+        self.name = name
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
@@ -120,7 +120,8 @@ class Linear(Record):
     def __init__(self, n, m= None, name= 'linear'):
         if m is None: m = n
         self.name = name
-        self.kern = tf.get_variable(name, (m, n))
+        with tf.variable_scope(name):
+            self.kern = tf.get_variable('kern', (m, n))
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
@@ -129,10 +130,12 @@ class Linear(Record):
     def embed(self, x, name= 'embed'):
         return tf.gather(self.kern, x, name= name or self.name)
 
-    def transpose(self, name= None):
+    def transpose(self, name= 'transpose'):
         self = copy(self)
-        self.name = name or self.name
-        self.kern = tf.transpose(self.kern, name= self.name)
+        self.name = name
+        with tf.variable_scope(name):
+            self.kern = tf.transpose(self.kern)
+        return self
 
 
 class Affine(Record):
@@ -140,14 +143,34 @@ class Affine(Record):
 
     def __init__(self, n, m= None, name= 'affine'):
         if m is None: m = n
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.kern = tf.get_variable('kern', (m, n))
             self.bias = tf.get_variable('bias', n)
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
-            return tf.tensordot(x, self.kern, 1) + self.bias
+            return self.bias + tf.tensordot(x, self.kern, 1)
+
+
+class Conv(Record):
+    """channal-last convolution from `m` to `n` channels"""
+
+    def __init__(self, n, m= None, shape= (2,) name= 'conv'):
+        if m is None: m = n
+        self.name = name
+        with tf.variable_scope(name):
+            self.kern = tf.get_variable('kern', shape + (m, n))
+            self.bias = tf.get_variable('bias', n)
+
+    def __call__(self, x, padding= 'SAME', stride= None, dilation= None, name= None):
+        return self.bias + tf.nn.convolution(
+            input= x
+            , filter= self.kern
+            , padding= padding
+            , strides= stride
+            , dilation_rate= dilation
+            , name= name or self.name)
 
 
 class Multilayer(Record):
@@ -159,8 +182,8 @@ class Multilayer(Record):
         if isinstance(mid, int): mid = mid,
         if isinstance(act, Maxout): mid = [act.k * i for i in mid]
         self.act = act
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.out = Affine(n, mid[-1], 'out')
             if 1 == len(mid):
                 self.mid = Affine(mid[0], m, 'mid'),
@@ -185,8 +208,8 @@ class AdditiveAttention(Record):
         if mid is None: mid = m
         if isinstance(act, Maxout): mid *= act.k
         self.act = act
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.q = Affine(mid, m, 'q')
             self.k = Linear(mid, n, 'k')
             self.a = Linear(1, mid, 'a')
@@ -217,9 +240,10 @@ class TransformerAttention(Record):
         if m is None: m = n
         if num_head is None: num_head = n // 64
         assert not n % num_head
-        self.n, self.num_head = n, num_head
+        self.n = n
+        self.num_head = num_head
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.q = Linear(n, m, 'q')
             self.k = Linear(n, n, 'k')
             self.v = Linear(n, n, 'v')
@@ -242,8 +266,8 @@ class QueryAttention(Record):
     def __init__(self, n, m= None, name= 'attention', layer= Multilayer, **largs):
         if m is None: m = n
         self.n = n
+        self.name = name
         with tf.variable_scope(name):
-            self.name = name
             self.q = layer(n, m, name= 'q', **largs)
 
     def __call__(self, query, value, mask= None, name= None, softmax= True, scale= True, head= 1):
