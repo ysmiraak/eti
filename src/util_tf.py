@@ -156,7 +156,7 @@ class Affine(Record):
 class Conv(Record):
     """channal-last convolution from `m` to `n` channels"""
 
-    def __init__(self, n, m= None, shape= (2,) name= 'conv'):
+    def __init__(self, n, m= None, shape= (2,), name= 'conv'):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
