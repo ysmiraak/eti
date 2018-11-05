@@ -35,16 +35,18 @@ def batch_load(path= pform(P.wmt, "corpus")
 ###############
 
 model = T.new(**select(C, *T._new))
-valid = model.data(**select(C, *T._data)).build(trainable= False)
-trans = partial(translate, model= valid, index= index, batch= C.batch_valid)
+modat = model.data(**select(C, *T._data))
+valid = modat.build(trainable= False)
+infer = modat.infer(**select(C, *T._infer))
+trans = partial(translate, model= infer, index= index, batch= C.batch_valid)
 
 # # for profiling
-# m, src, tgt = valid, src_valid[:C.batch_valid], tgt_valid[:C.batch_valid]
+# m, src, tgt = modat, src_valid[:C.batch_valid], tgt_valid[:C.batch_valid]
 # from util_tf import profile
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()
 #     with tf.summary.FileWriter(pform(P.log, C.trial), sess.graph) as wtr:
-#         profile(sess, wtr, m.acc, feed_dict= {m.src_: src, m.tgt_: tgt})
+#         profile(sess, wtr, (infer.pred, valid.acc), feed_dict= {m.src_: src, m.tgt_: tgt})
 
 src_train, tgt_train = pipe(batch_load, (tf.uint8, tf.uint8), prefetch= 16)
 train = model.data(src= src_train, tgt= tgt_train, **select(C, *T._data)) \

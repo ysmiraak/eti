@@ -8,8 +8,7 @@ master = Record(
     ### model spec
     , dim_src = 256
     , dim_tgt = 256
-    , cap_tgt = 256
-    , cap_src = 256
+    , cap     = 256
     # model dimension
     , dim     = 256
     # mlp middle layer dimension
@@ -37,4 +36,4 @@ wide = Record(master, dim= 512, dim_mid= 1024)
 deep = Record(master, depth= 4)
 
 
-config = Record(master, trial= 'o', ckpt= 5)
+config = Record(master, trial= 'a', ckpt= None)
