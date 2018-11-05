@@ -43,7 +43,7 @@ trans = partial(translate, model= valid, index= index, batch= C.batch_valid)
 # from util_tf import profile
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()
-#     with tf.summary.FileWriter(pform(P.log, "graph"), sess.graph) as wtr:
+#     with tf.summary.FileWriter(pform(P.log, C.trial), sess.graph) as wtr:
 #         profile(sess, wtr, m.acc, feed_dict= {m.src_: src, m.tgt_: tgt})
 
 src_train, tgt_train = pipe(batch_load, (tf.uint8, tf.uint8), prefetch= 16)

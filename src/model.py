@@ -157,25 +157,25 @@ class Transformer(Record):
             dropout = smooth = identity
         # encoder input is source embedding + position encoding
         # dropout only the trained embedding
-        with tf.variable_scope('.emb_src'):
+        with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
         # decoder input is trained position embedding only
-        with tf.variable_scope('.emb_pos'):
+        with tf.variable_scope('emb_pos_'):
             x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
         # source mask disables current step and padding steps
-        with tf.variable_scope('.encode'):
+        with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
         # bridge mask disables padding steps in source
-        x = self.bridge(x, self.mask, dropout, w, '.bridge')
+        x = self.bridge(x, self.mask, dropout, w, 'bridge_')
         # target mask disables current step
-        with tf.variable_scope('.decode'):
+        with tf.variable_scope('decode_'):
             for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
-        y = self.logit(x, '.logit')
-        with tf.variable_scope('.prob'): prob = tf.nn.softmax(y)
-        with tf.variable_scope('.pred'): pred = tf.argmax(y, -1, output_type= tf.int32)
-        with tf.variable_scope('.acc'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.tgt_, pred)))
-        with tf.variable_scope('.loss'):
+        y = self.logit(x, 'logit_')
+        with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
+        with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
+        with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.tgt_, pred)))
+        with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.tgt_), logits= y)
                 if trainable else
