@@ -39,7 +39,7 @@ class Sinusoid(Record):
             return sinusoid(time, self.dim) if self.pos is None else self.pos[:time]
 
 
-class AttentionBlock(Record):
+class EncodeBlock(Record):
 
     def __init__(self, dim, dim_mid, act, name):
         with tf.variable_scope(name):
@@ -63,77 +63,59 @@ class Transformer(Record):
     """-> Record
 
     model = Transformer.new( ... )
-    train = model.data( ... ).build().train()
+    train = model.data( ... ).build( ... ).train( ... )
     valid = model.data( ... ).build(trainable= False)
 
     """
-    _new   = 'dim', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap_tgt'
-    _data  = 'cap_src',
+    _new   = 'dim', 'dim_mid', 'depth', 'dim_src', 'dim_tgt'
+    _data  = 'cap',
     _build = 'dropout', 'smooth'
     _train = 'warmup', 'beta1', 'beta2', 'epsilon'
 
     @staticmethod
-    def new(dim, dim_mid, depth, dim_src, dim_tgt, cap_tgt, act= tf.nn.relu):
+    def new(dim, dim_mid, depth, dim_src, dim_tgt, act= tf.nn.relu, end= 1):
         """-> Transformer with fields
 
-        mask_tgt : f32 (1, t, t)
          emb_src : Linear
-         emb_pos : Linear
-          encode : tuple AttentionBlock
-          decode : tuple AttentionBlock
-          bridge : AttentionBlock
+          encode : tuple EncodeBlock
            logit : Affine
 
         """
         assert not dim % 2
         with tf.variable_scope('encode'):
-            encode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
-        # with tf.variable_scope('decode'):
-        #     mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap_tgt), 0))
-        #     decode = tuple(AttentionBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            encode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
-            emb_src= Linear(dim, dim_src, 'emb_src')
-            # , mask_tgt= mask_tgt
-            # , emb_pos= Linear(dim, cap_tgt, 'emb_pos')
+            logit= Affine(dim_tgt, dim, 'logit')
+            , emb_src= Linear(dim, dim_src, 'emb_src')
             , encode= encode
-            # , decode= decode
-            # , bridge= AttentionBlock(dim, dim_mid, act, "bridge")
-            , logit= Affine(dim_tgt, dim, 'logit'))
+            , end= tf.constant(end, tf.int32, (), 'end'))
 
-    def data(self, src= None, tgt= None, cap_src= None, end= 1):
+    def data(self, src= None, tgt= None, cap= None):
         """-> Transformer with new fields
 
-             src : i32 (b, s)    source with `end` trimmed among the batch
             src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
             tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
-            mask : f32 (b, 1, s) bridge mask
-        mask_src : f32 (b, s, s) source mask
+             src : i32 (b, s)    source with `end` trimmed among the batch
+            gold : i32 (b, t)    target one step ahead
+            mask : f32 (1, s, s) source mask
         position : Sinusoid
 
-        setting `cap_src` makes it more efficient for training.  you
-        won't be able to feed it longer sequences, but it doesn't
-        affect any model parameters.
+        setting `cap` makes it more efficient for training.  you won't
+        be able to feed it longer sequences, but it doesn't affect any
+        model parameters.
 
         """
-        with tf.variable_scope('tgt'):
-            tgt_ = placeholder(tf.int32, (None, None), tgt)
         with tf.variable_scope('src'):
             src_ = placeholder(tf.int32, (None, None), src)
-            # not_end = tf.to_float(tf.not_equal(src_, end))
-            # len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_end, 0)))
-            # not_end = tf.expand_dims(not_end[:,:len_src], 1)
-            # mask_src = tf.log(not_end + tf.expand_dims(1 - tf.eye(len_src), 0))
-            # mask = tf.log(not_end)
-            # src = src_[:,:len_src]
-            mask_src = tf.log(tf.expand_dims(1 - tf.eye(cap_src), 0))
+            mask = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
+        with tf.variable_scope('tgt'):
+            tgt_ = placeholder(tf.int32, (None, None), tgt)
         return Transformer(
-            # src= src
-            src= src_
-            , src_= src_
+            position= Sinusoid(int(self.logit.kern.shape[0]), cap)
+            , src_= src_, src= src_
             , tgt_= tgt_
-            # , mask= mask
-            , mask_src= mask_src
-            , position= Sinusoid(int(self.logit.kern.shape[0]), cap_src)
+            , gold= tgt_
+            , mask= mask
             , **self)
 
     def build(self, trainable= True, dropout= 0.1, smooth= 0.1):
@@ -157,32 +139,21 @@ class Transformer(Record):
             smooth  = Smooth(smooth, dim_tgt)
         else:
             dropout = smooth = identity
-        # encoder input is source embedding + position encoding
-        # dropout only the trained embedding
         with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-        # # decoder input is trained position embedding only
-        # with tf.variable_scope('emb_pos_'):
-        #     x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
-        # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
-            for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        x = w
-        # # bridge mask disables padding steps in source
-        # x = self.bridge(x, self.mask, dropout, w, 'bridge_')
-        # # target mask disables current step
-        # with tf.variable_scope('decode_'):
-        #     for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
-        y = self.logit(x, 'logit_')
+            for enc in self.encode: w = enc(w, self.mask, dropout)
+        y = self.logit(w, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
-        with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.tgt_, pred)))
+        with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.tgt_), logits= y)
+                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
+                # * (1 + tf.range(cap, dtype= tf.float32) * tf.to_float(tf.not_equal(self.gold, self.end)))
                 if trainable else
-                tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.tgt_, logits= y))
+                tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
         self = Transformer(output= y, prob= prob, pred= pred, loss= loss, acc= acc, **self)
         if trainable: self.dropout, self.smooth = dropout, smooth
         return self
@@ -204,7 +175,7 @@ class Transformer(Record):
         return Transformer(step= s, lr= lr, up= up, **self)
 
 
-def infer(sess, model, fetches, src, tgt= None, batch= None):
+def batch_run(sess, model, fetches, src, tgt= None, batch= None):
     if batch is None: batch = len(src)
     for i, j in partition(len(src), batch, discard= False):
         feed = {model.src_: src[i:j]}
@@ -216,5 +187,5 @@ def infer(sess, model, fetches, src, tgt= None, batch= None):
 def translate(sess, sents, index, model, dtype= np.uint8, batch= None):
     if not isinstance(sents, np.ndarray):
         sents = encode(index, sents, dtype= dtype)
-    for preds in infer(sess, model, model.pred, src= sents, batch= batch):
+    for preds in batch_run(sess, model, model.pred, src= sents, batch= batch):
         yield from decode(index, preds)
