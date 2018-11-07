@@ -20,7 +20,7 @@ def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
         a = tf.reshape(
             freq ** ((2 / dim) * tf.range(dim // 2, dtype= tf.float32))
             , (-1, 1)) @ tf.reshape(
-                1 + tf.range(tf.cast(time, tf.float32), dtype= tf.float32)
+                1 + tf.range(tf.to_float(time), dtype= tf.float32)
                 , (1, -1))
         s = tf.reshape(tf.concat((tf.sin(a), tf.cos(a)), -1), (dim, time))
         if scale: s *= dim ** -0.5
@@ -151,7 +151,9 @@ class Transformer(Record):
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                * (1 + tf.range(cap, dtype= tf.float32) * tf.to_float(tf.not_equal(self.gold, self.end)))
+                * (tf.range(tf.to_float(tf.shape(self.gold)[1]), dtype= tf.float32)
+                   * tf.to_float(tf.not_equal(self.gold, self.end))
+                   + 1.0)
                 if trainable else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
         self = Transformer(output= y, prob= prob, pred= pred, loss= loss, acc= acc, **self)
