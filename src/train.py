@@ -4,8 +4,8 @@ from model import Transformer as T, batch_run, translate
 from tqdm import tqdm
 from trial import config as C
 from util import partial, select, PointedIndex
-from util_io import path as P, pform, sieve, load_txt, save_txt, load_pkl
-from util_np import np, sample, encode, decode
+from util_io import path as P, pform, save_txt, load_pkl
+from util_np import np, sample
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
@@ -13,34 +13,11 @@ tf.set_random_seed(C.seed)
 # load data #
 #############
 
-src_tgt = list(sieve(
-    zip(load_txt(pform(P.raw, "europarl-v7.de-en.de"))
-        , load_txt(pform(P.raw, "europarl-v7.de-en.en")))
-    , C.cap))
-np.random.seed(C.seed)
-np.random.shuffle(src_tgt)
-src_valid, tgt_valid = zip(*src_tgt[:C.batch_valid * 5])
-src_train, tgt_train = zip(*src_tgt[C.batch_valid * 5:])
-del src_tgt
-
-# from collections import Counter
-# from itertools import chain
-# from util import diter
-# from util_io import save_pkl, vocab
-# chars = Counter(chain(diter(src_train, 2), diter(tgt_train, 2)))
-# index = "".join(vocab(chars, specials= "\xa0\n "))
-# save_pkl(pform(P.data, P.idx), index)
-# save_txt(pform(P.data, P.src), src_valid)
-# save_txt(pform(P.data, P.tgt), tgt_valid)
-
+src_valid = np.load(pform(P.data, "valid_src.npy"))
+tgt_valid = np.load(pform(P.data, "valid_tgt.npy"))
+src_train = np.load(pform(P.data, "train_src.npy"))
+tgt_train = np.load(pform(P.data, "train_tgt.npy"))
 idx = PointedIndex(load_pkl(pform(P.data, P.idx)))
-enc = partial(encode, idx, length= C.cap, dtype= np.uint8)
-dec = partial(decode, idx)
-
-src_valid = enc(src_valid)
-tgt_valid = enc(tgt_valid)
-src_train = enc(src_train)
-tgt_train = enc(tgt_train)
 
 ###############
 # build model #

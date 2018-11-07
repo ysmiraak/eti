@@ -20,7 +20,7 @@ def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
         a = tf.reshape(
             freq ** ((2 / dim) * tf.range(dim // 2, dtype= tf.float32))
             , (-1, 1)) @ tf.reshape(
-                1 + tf.range(tf.cast(time, tf.float32), dtype= tf.float32)
+                1 + tf.range(tf.to_float(time), dtype= tf.float32)
                 , (1, -1))
         s = tf.reshape(tf.concat((tf.sin(a), tf.cos(a)), -1), (dim, time))
         if scale: s *= dim ** -0.5
