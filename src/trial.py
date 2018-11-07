@@ -8,8 +8,7 @@ master = Record(
     ### model spec
     , dim_src = 256
     , dim_tgt = 256
-    , cap_tgt = 256
-    , cap_src = 256
+    , cap     = 256
     # model dimension
     , dim     = 256
     # mlp middle layer dimension

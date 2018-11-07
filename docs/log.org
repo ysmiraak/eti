@@ -17,6 +17,10 @@ the model does not learn as well without the mask
 
 use the big dataset on the server /data/wmt/de-en
 
+** s
+
+straight branch
+
 * todo
 
 investigate the cause for indecisiveness of middle steps
@@ -30,6 +34,4 @@ but it may help coordinating tgt and src
 
 when and where should we apply dropout?
 
-** try convolution instead of self-attention
-
-or both
+** try convolution with self-attention
