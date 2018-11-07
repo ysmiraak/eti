@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from model import Transformer as T, infer, translate
+from model import Transformer as T, batch_run, translate
 from tqdm import tqdm
 from trial import config as C
 from util import partial, select, PointedIndex
@@ -85,7 +85,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
              (tf.summary.scalar('step_loss', valid.loss)
               , tf.summary.scalar('step_acc', valid.acc)))):
-    loss, acc = map(np.mean, zip(*infer(
+    loss, acc = map(np.mean, zip(*batch_run(
         sess= sess
         , model= valid
         , fetches= (valid.loss, valid.acc)
