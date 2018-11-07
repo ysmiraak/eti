@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from model import Transformer as T
 from trial import config as C
 from util import partial, select, PointedIndex

@@ -7,20 +7,35 @@ import re
 
 path = Record(
     log = expanduser("~/cache/tensorboard-logdir/eti")
-    , wmt = expanduser("~/data/wmt/de-en")
+    # , raw = expanduser("~/data/wmt/de-en")
+    , raw = "../data"
     , pred = "../trial/pred"
     , ckpt = "../trial/ckpt"
     , data = "../trial/data"
-    , voc = "voc.tsv"
     , idx = "idx.pkl"
-    , src = "src.npy"
-    , tgt = "tgt.npy"
+    , src = "src.txt"
+    , tgt = "tgt.txt"
 )
 
 
 def pform(path, *names, sep= ''):
-    """format a path as `path` followed by `names` joined with `sep`."""
+    """formats a path as `path` followed by `names` joined with `sep`."""
     return join(path, sep.join(map(str, names)))
+
+
+def sieve(src_tgt, cap):
+    """removes extra whitespaces in strs and strs longer than `cap` in
+    `src_tgt : seq (str, str)`.
+
+    """
+    for src, tgt in src_tgt:
+        src = " ".join(src.split())
+        tgt = " ".join(tgt.split())
+        if not src or not tgt \
+           or cap < len(src) \
+           or cap < len(tgt):
+            continue
+        yield src, tgt
 
 
 def clean(s, p= re.compile(r"&#91;|&#93;|&amp;|&apos;|&gt;|&lt;|&quot;|@-@|� s")
@@ -35,18 +50,6 @@ def clean(s, p= re.compile(r"&#91;|&#93;|&amp;|&apos;|&gt;|&lt;|&quot;|@-@|� s
               , "&quot;": "\""
               , "@-@": "-"}: t[m.group()]):
     return p.sub(tr, s)
-
-
-def sieve(lines, cap_src, cap_tgt):
-    for line in lines:
-        src, tgt, _ = clean(line).split("\t")
-        src = " ".join(src.split())
-        tgt = " ".join(tgt.split())
-        if not src or not tgt \
-           or cap_src < len(src) \
-           or cap_tgt < len(tgt):
-            continue
-        yield src, tgt
 
 
 def load_txt(filename):
