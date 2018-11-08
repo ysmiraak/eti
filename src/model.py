@@ -76,9 +76,9 @@ class Transformer(Record):
     def new(dim, dim_mid, depth, dim_src, dim_tgt, act= tf.nn.relu, end= 1):
         """-> Transformer with fields
 
-         emb_src : Linear
-          encode : tuple EncodeBlock
            logit : Affine
+          encode : tuple EncodeBlock
+         emb_src : Linear
 
         """
         assert not dim % 2
@@ -86,19 +86,19 @@ class Transformer(Record):
             encode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
             logit= Affine(dim_tgt, dim, 'logit')
-            , emb_src= Linear(dim, dim_src, 'emb_src')
             , encode= encode
+            , emb_src= Linear(dim, dim_src, 'emb_src')
             , end= tf.constant(end, tf.int32, (), 'end'))
 
     def data(self, src= None, tgt= None, cap= None):
         """-> Transformer with new fields
 
+        position : Sinusoid
             src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
             tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
              src : i32 (b, s)    source with `end` trimmed among the batch
             gold : i32 (b, t)    target one step ahead
             mask : f32 (1, s, s) source mask
-        position : Sinusoid
 
         setting `cap` makes it more efficient for training.  you won't
         be able to feed it longer sequences, but it doesn't affect any
