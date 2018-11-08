@@ -76,12 +76,13 @@ class Transformer(Record):
     def new(dim, dim_mid, depth, dim_src, dim_tgt, cap, act= tf.nn.relu, end= 1):
         """-> Transformer with fields
 
-         emb_src : Linear
-         emb_pos : Linear
-          encode : tuple EncodeBlock
+           logit : Affine
           decode : tuple EncodeBlock
           bridge : EncodeBlock
-           logit : Affine
+          encode : tuple EncodeBlock
+        mask_tgt : f32 (1, t, t)
+         emb_pos : Linear
+         emb_src : Linear
 
         """
         assert not dim % 2
@@ -89,26 +90,27 @@ class Transformer(Record):
             encode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
             decode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
         return Transformer(
             logit= Affine(dim_tgt, dim, 'logit')
-            , emb_src= Linear(dim, dim_src, 'emb_src')
-            , emb_pos= Linear(dim, cap, 'emb_pos')
-            , encode= encode
             , decode= decode
             , bridge= EncodeBlock(dim, dim_mid, act, "bridge")
+            , encode= encode
+            , mask_tgt= mask_tgt
+            , emb_pos= Linear(dim, cap, 'emb_pos')
+            , emb_src= Linear(dim, dim_src, 'emb_src')
             , end= tf.constant(end, tf.int32, (), 'end'))
 
     def data(self, src= None, tgt= None, cap= None, end= 1):
         """-> Transformer with new fields
 
+        position : Sinusoid
             src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
             tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
              src : i32 (b, s)    source with `end` trimmed among the batch
-            gold : i32 (b, t)    target one step ahead
+            gold : i32 (b, t)    target
             mask : f32 (b, 1, s) bridge mask
         mask_src : f32 (b, s, s) source mask
-        mask_tgt : f32 (1, t, t) target mask
-        position : Sinusoid
 
         setting `cap` makes it more efficient for training.  you won't
         be able to feed it longer sequences, but it doesn't affect any
@@ -125,7 +127,6 @@ class Transformer(Record):
             src = src_[:,:len_src]
         with tf.variable_scope('tgt'):
             tgt_ = placeholder(tf.int32, (None, None), tgt)
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
         return Transformer(
             position= Sinusoid(int(self.logit.kern.shape[0]), cap)
             , src_= src_, src= src
@@ -133,7 +134,6 @@ class Transformer(Record):
             , gold= tgt_
             , mask= mask
             , mask_src= mask_src
-            , mask_tgt= mask_tgt
             , **self)
 
     def build(self, trainable= True, dropout= 0.1, smooth= 0.1):
