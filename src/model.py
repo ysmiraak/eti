@@ -101,11 +101,11 @@ class Transformer(Record):
     def new(dim, dim_mid, depth, dim_src, dim_tgt, act= tf.nn.relu, end= 1, begin= 2):
         """-> Transformer with fields
 
-         emb_src : Linear
-         emb_tgt : Linear
-          encode : tuple EncodeBlock
-          decode : tuple EncodeBlock
            logit : Affine
+          decode : tuple EncodeBlock
+          encode : tuple EncodeBlock
+         emb_tgt : Linear
+         emb_src : Linear
 
         """
         assert not dim % 2
@@ -115,16 +115,17 @@ class Transformer(Record):
             decode = tuple(DecodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
             logit= Affine(dim_tgt, dim, 'logit')
-            , emb_src= Linear(dim, dim_src, 'emb_src')
-            , emb_tgt= Linear(dim, dim_tgt, 'emb_tgt')
-            , encode= encode
             , decode= decode
-            , end= tf.constant(end, tf.int32, (), 'end')
-            , begin= tf.constant(begin, tf.int32, (), 'begin'))
+            , encode= encode
+            , emb_tgt= Linear(dim, dim_tgt, 'emb_tgt')
+            , emb_src= Linear(dim, dim_src, 'emb_src')
+            , begin= tf.constant(begin, tf.int32, (), 'begin')
+            , end= tf.constant(end, tf.int32, (), 'end'))
 
     def data(self, src= None, tgt= None, cap= None):
         """-> Transformer with new fields
 
+        position : Sinusoid
             src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
             tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
              src : i32 (b, s)    source with `end` trimmed among the batch
@@ -133,7 +134,6 @@ class Transformer(Record):
             gold : i32 (b, t)    target one step ahead
             mask : f32 (b, 1, s) bridge mask
         mask_src : f32 (b, s, s) source mask
-        position : Sinusoid
 
         setting `cap` makes it more efficient for training.  you won't
         be able to feed it longer sequences, but it doesn't affect any
