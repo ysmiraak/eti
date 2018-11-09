@@ -1,25 +1,20 @@
 * trial
 
-** n
+- a encoder-decoder, autoregressive (autoreg)
+- s straight seq2seq, weighted loss (straight)
+- n encoder-bridge-decoder, nonautoregressive, weighted loss (master)
+- o encoder-bridge-decoder, nonautoregressive, nonweighted loss (master)
+- p encoder-decoder, nonautoregressive, weighted loss (position)
 
-without masking current step
+* findings
 
-if the other steps offer no valuable info,
-current step should simply trust in itself.
+** masking current step
 
-*** conclusion
+thought: if the other steps offer no valuable info, current step
+should simply trust in itself.
 
-the mask is useful
-
-the model does not learn as well without the mask
-
-** o
-
-use the big dataset on the server /data/wmt/de-en
-
-** s
-
-straight branch
+found: the mask is useful.  the model does not learn as fast without
+the mask
 
 * todo
 
