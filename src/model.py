@@ -99,6 +99,7 @@ class Transformer(Record):
             , mask_tgt= mask_tgt
             , emb_pos= Linear(dim, cap, 'emb_pos')
             , emb_src= Linear(dim, dim_src, 'emb_src')
+            , cap= tf.constant(cap, tf.int32, (), 'cap')
             , end= tf.constant(end, tf.int32, (), 'end'))
 
     def data(self, src= None, tgt= None, cap= None, end= 1):
@@ -180,7 +181,7 @@ class Transformer(Record):
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                * (tf.range(tf.to_float(tf.shape(self.gold)[1]), dtype= tf.float32)
+                * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
                    * tf.to_float(tf.not_equal(self.gold, self.end))
                    + 1.0)
                 if trainable else
