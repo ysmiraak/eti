@@ -59,6 +59,29 @@ class EncodeBlock(Record):
             return x
 
 
+class DecodeBlock(Record):
+
+    def __init__(self, dim, dim_mid, act, name):
+        self.name = name
+        with tf.variable_scope(name):
+            with tf.variable_scope('csl'):
+                self.csl = Attention(dim, layer= Multilayer, mid= dim_mid, act= act)
+                self.norm_csl = Normalize(dim)
+            with tf.variable_scope('att'):
+                self.att = Attention(dim, layer= Multilayer, mid= dim_mid, act= act)
+                self.norm_att = Normalize(dim)
+            with tf.variable_scope('mlp'):
+                self.mlp = Multilayer(dim, dim, dim_mid, act)
+                self.norm_mlp = Normalize(dim)
+
+    def __call__(self, x, v, w, m, dropout, mask= None, name= None):
+        with tf.variable_scope(name or self.name):
+            with tf.variable_scope('csl'): x = self.norm_csl(x + dropout(self.csl(x, v, mask)))
+            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, w, m)))
+            with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
+            return x
+
+
 class Transformer(Record):
     """-> Record
 
@@ -78,7 +101,6 @@ class Transformer(Record):
 
            logit : Affine
           decode : tuple EncodeBlock
-          bridge : EncodeBlock
           encode : tuple EncodeBlock
         mask_tgt : f32 (1, t, t)
          emb_pos : Linear
@@ -89,16 +111,16 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            decode = tuple(EncodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            decode = tuple(DecodeBlock(dim, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
             mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
         return Transformer(
             logit= Affine(dim_tgt, dim, 'logit')
             , decode= decode
-            , bridge= EncodeBlock(dim, dim_mid, act, "bridge")
             , encode= encode
             , mask_tgt= mask_tgt
             , emb_pos= Linear(dim, cap, 'emb_pos')
             , emb_src= Linear(dim, dim_src, 'emb_src')
+            , cap= tf.constant(cap, tf.int32, (), 'cap')
             , end= tf.constant(end, tf.int32, (), 'end'))
 
     def data(self, src= None, tgt= None, cap= None, end= 1):
@@ -168,11 +190,9 @@ class Transformer(Record):
         # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        # bridge mask disables padding steps in source
-        x = self.bridge(x, self.mask, dropout, w, 'bridge_')
         # target mask disables current step
         with tf.variable_scope('decode_'):
-            for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
+            for dec in self.decode: x = dec(x, x, w, self.mask, dropout, self.mask_tgt)
         y = self.logit(x, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
@@ -180,7 +200,7 @@ class Transformer(Record):
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                * (tf.range(tf.to_float(tf.shape(self.gold)[1]), dtype= tf.float32)
+                * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
                    * tf.to_float(tf.not_equal(self.gold, self.end))
                    + 1.0)
                 if trainable else
