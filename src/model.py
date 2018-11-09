@@ -200,9 +200,9 @@ class Transformer(Record):
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
-                   * tf.to_float(tf.not_equal(self.gold, self.end))
-                   + 1.0)
+                # * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
+                #    * tf.to_float(tf.not_equal(self.gold, self.end))
+                #    + 1.0)
                 if trainable else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
         self = Transformer(output= y, prob= prob, pred= pred, loss= loss, acc= acc, **self)
