@@ -4,6 +4,7 @@
 - s straight seq2seq (straight)
 - v encoder-bridge-decoder, nonautoregressive (master)
 - p encoder-decoder, nonautoregressive (position)
+- q like p but with decoder causal mask
 
 * findings
 
@@ -17,7 +18,8 @@ the mask
 
 ** weighted loss over seq
 
-apply linearly increasing weights on the loss over sequence 1,2,3,...,t,1,...,1
+apply linearly increasing weights on the loss over sequence
+1,2,3,...,t,1,...,1
 
 does not seem to work and even hinders learning
 
