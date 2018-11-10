@@ -6,6 +6,7 @@
 - p encoder-decoder, nonautoregressive (position)
 
 - i iterated decoder, nonautoregressive (variational)
+- j iterated decoder from embedding to logit (variational-for-real)
 - l like p but with linear weight over loss (postion-weighted-linear)
 - r like p but with sqrt weight over loss (postion-weighted-sqrt)
 
