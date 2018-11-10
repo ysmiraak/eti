@@ -4,7 +4,11 @@
 - s straight seq2seq (straight)
 - v encoder-bridge-decoder, nonautoregressive (master)
 - p encoder-decoder, nonautoregressive (position)
-- q like p but with decoder causal mask
+- q like p but with decoder causal mask (position-causal)
+
+- i iterated decoder, nonautoregressive (variational)
+- l like p but with linear weight over loss (postion-weighted-linear)
+- r like p but with sqrt weight over loss (postion-weighted-sqrt)
 
 * findings
 
