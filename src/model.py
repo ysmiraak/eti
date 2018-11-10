@@ -190,7 +190,7 @@ class Transformer(Record):
         for lvl in range(4):
             with tf.variable_scope('lvl{}_'.format(lvl)):
                 with tf.variable_scope('emb_tgt_'):
-                    x = self.position.pos + dropout(self.emb_tgt.kern(tf.nn.softmax(y)))
+                    x = self.position.pos + dropout(self.emb_tgt(tf.nn.softmax(y)))
                 with tf.variable_scope('decode_'):
                     x = self.decode(x, x, w, self.mask, dropout, self.mask_tgt)
                 y = self.logit(x, 'logit_')
