@@ -4,7 +4,7 @@ from model import Transformer as T, batch_run
 from tqdm import tqdm
 from trial import config as C
 from util import partial, select
-from util_io import path as P, pform, save_txt, load_pkl
+from util_io import path as P, pform, load_txt, save_txt, load_pkl
 from util_np import np, vpack, sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
