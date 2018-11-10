@@ -99,7 +99,7 @@ class Transformer(Record):
         """-> Transformer with fields
 
            logit : Affine
-          decode : tuple EncodeBlock
+          decode : DecodeBlock
           encode : tuple EncodeBlock
         mask_tgt : f32 (1, t, t)
          emb_pos : Linear
@@ -110,14 +110,15 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            decode = (DecodeBlock(dim_emb, dim_mid, act, "layer"),) * 4
+            decode = DecodeBlock(dim_emb, dim_mid, act, "layer")
             mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
         return Transformer(
             logit= Affine(dim_tgt, dim_emb, 'logit')
             , decode= decode
             , encode= encode
             , mask_tgt= mask_tgt
-            , emb_pos= Linear(dim_emb, cap, 'emb_pos')
+            , emb_pos= Linear(dim_tgt, cap, 'emb_pos')
+            , emb_tgt= Linear(dim_emb, dim_tgt, 'emb_tgt')
             , emb_src= Linear(dim_emb, dim_src, 'emb_src')
             , dim_emb= dim_emb
             , dim_tgt= dim_tgt
@@ -180,28 +181,37 @@ class Transformer(Record):
         with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-        # decoder input is trained position embedding only
-        with tf.variable_scope('emb_pos_'):
-            x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
         # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        # target mask disables current step
-        with tf.variable_scope('decode_'):
-            for dec in self.decode:
-                x = dec(x, x, w, self.mask, dropout, self.mask_tgt)
-        y = self.logit(x, 'logit_')
+
+        # 4 level variational inference
+        ys, y = [], tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1))
+        for lvl in range(4):
+            with tf.variable_scope('lvl{}_'.format(lvl)):
+                with tf.variable_scope('emb_tgt_'):
+                    x = self.position.pos + dropout(tf.matmul(tf.nn.softmax(y), self.emb_tgt.kern))
+                with tf.variable_scope('decode_'):
+                    x = self.decode(x, x, w, self.mask, dropout, self.mask_tgt)
+                y = self.logit(x, 'logit_')
+                ys.append(y)
+
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
         with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
         with tf.variable_scope('loss_'):
             loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                # * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
-                #    * tf.to_float(tf.not_equal(self.gold, self.eos))
-                #    + 1.0)
-                if trainable else
+                # tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
+                # # * (tf.range(tf.to_float(self.cap), dtype= tf.float32)
+                # #    * tf.to_float(tf.not_equal(self.gold, self.eos))
+                # #    + 1.0)
+                # if trainable else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
+            if trainable:
+                for y in ys[:-1]:
+                    loss += tf.reduce_mean(
+                        tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
+                y = ys[-1]
         self = Transformer(output= y, prob= prob, pred= pred, loss= loss, acc= acc, **self)
         if trainable: self.dropout, self.smooth = dropout, smooth
         return self
