@@ -154,8 +154,8 @@ class Transformer(Record):
             tgt = tf.concat((init, gold[:,:-1]), 1)
         return Transformer(
             position= Sinusoid(self.dim_emb, self.cap)
-            , src= src, src_= src_
-            , tgt= tgt, tgt_= tgt_
+            , src_= src_, src= src
+            , tgt_= tgt_, tgt= tgt
             , init= init
             , gold= gold
             , mask= mask
