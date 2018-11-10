@@ -5,14 +5,18 @@ master = Record(
     trial  = 'm'
     , ckpt = None
     , seed = 0
+    ### data spec
+    , unk = 0
+    , eos = 1
+    , bos = -1
+    , cap = 64
     ### model spec
-    , dim_src = 256
-    , dim_tgt = 256
-    , cap     = 256
+    , dim_src = 8192
+    , dim_tgt = 8192
     # model dimension
-    , dim     = 256
+    , dim_emb = 512
     # mlp middle layer dimension
-    , dim_mid = 512
+    , dim_mid = 1024
     # encoder and decoder depth
     , depth   = 2
     ### regularization
@@ -29,11 +33,13 @@ master = Record(
     , batch_train = 64
     # batch size for validation
     , batch_valid = 512
+    # instances for validation
+    , total_valid = 2560
 )
 
 
-wide = Record(master, dim= 512, dim_mid= 1024)
+wide = Record(master, dim_mid= 2048)
 deep = Record(master, depth= 4)
 
 
-config = Record(master, trial= 'p', depth= 2, ckpt= None)
+config = Record(master, trial= 'p', ckpt= None)
