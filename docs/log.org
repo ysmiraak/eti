@@ -10,11 +10,20 @@
 
 ** masking current step
 
-thought: if the other steps offer no valuable info, current step
-should simply trust in itself.
+thought:
 
-found: the mask is useful.  the model does not learn as fast without
-the mask
+if the other steps offer no valuable info,
+current step should simply trust in itself.
+
+found:
+
+the mask is useful.
+the model does not learn as fast without the mask.
+
+however when causal mask is present,
+this means that the first and last step in self-attention
+have no values to attend to,
+which results in nans
 
 ** weighted loss over seq
 
