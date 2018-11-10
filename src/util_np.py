@@ -1,5 +1,4 @@
-from itertools import islice, takewhile
-from util import identity
+from itertools import islice
 import numpy as np
 
 
@@ -14,7 +13,7 @@ def vpack(arrays, shape, fill, dtype= None):
     return array
 
 
-def partition(n, m, discard= True):
+def partition(n, m, discard= False):
     """yields pairs of indices which partitions `n` nats by `m`.  if not
     `discard`, also yields the final incomplete partition.
 
@@ -25,47 +24,28 @@ def partition(n, m, discard= True):
         yield n - (n % m), n
 
 
-def sample(n, m, seed= 0):
-    """yields `m` samples from `n` nats."""
-    assert 0 < m <= n
-    data = np.arange(n)
+def sample(n, seed= 0):
+    """yields samples from `n` nats."""
+    data = list(range(n))
     while True:
         np.random.seed(seed)
         np.random.shuffle(data)
-        yield from (data[i:j] for i, j in partition(n, m))
+        yield from data
 
 
-def batch(stream, len_bat, shuffle= 2**14, seed= 0, discard= False):
+def batch_sample(n, m, seed= 0):
+    """yields `m` samples from `n` nats."""
+    stream = sample(n, seed)
+    while True:
+        yield np.fromiter(stream, np.int, m)
+
+
+def batch(stream, batch, shuffle= 2**14, seed= 0, discard= True):
     """yields batches from `stream`."""
-    assert not shuffle % len_bat
+    assert not shuffle % batch
     while True:
         buf = list(islice(stream, shuffle))
         if not buf: break
         np.random.seed(seed)
         np.random.shuffle(buf)
-        yield from (buf[i:j] for i, j in partition(len(buf), len_bat, discard= discard))
-
-
-def decode(index, array, sep= "", end= "\n"):
-    """-> list str
-
-    decodes `array : array int` according to `index : PointedIndex`.
-    stops at `end` and joins the results with `sep`.  if `array` has a
-    higher rank, generates the results instead.
-
-    """
-    if 1 < array.ndim: return (decode(index, arr, sep, end) for arr in array)
-    return sep.join([index[i] for i in array[:sum(takewhile(identity, array != index(end)))]])
-
-
-def encode(index, sents, length= None, dtype= np.int, pad= "\n"):
-    """-> array dtype
-
-    encodes `sents : seq seq str` according to `index : PointedIndex`.
-    returns a rank 2 array whose second axis is be padded to `length`
-    or the maximum length.
-
-    """
-    sents = [np.fromiter(map(index, sent), dtype) for sent in sents]
-    if length is None: length = max(map(len, sents))
-    return vpack(sents, (len(sents), length), index(pad), dtype)
+        yield from (buf[i:j] for i, j in partition(len(buf), batch, discard= discard))

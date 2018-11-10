@@ -1,42 +1,55 @@
 #!/usr/bin/env python3
 
-from collections import Counter
-from itertools import chain
 from trial import config as C
-from util import diter, PointedIndex
-from util_io import path as P, pform, sieve, load_txt, save_txt, save_pkl, vocab
-from util_np import np, encode
+from util_io import path as P, pform, load_txt, save_txt
+from util_np import np, vpack
+from util_sp import spm
 
-##################
-# load and split #
-##################
+path_src = pform(P.raw, "europarl-v7.de-en.de")
+path_tgt = pform(P.raw, "europarl-v7.de-en.en")
 
-src_tgt = list(sieve(
-    zip(load_txt(pform(P.raw, "europarl-v7.de-en.de"))
-        , load_txt(pform(P.raw, "europarl-v7.de-en.en")))
-    , C.cap))
+###############
+# build vocab #
+###############
+
+vocab_src = spm(pform(P.data, "vocab_src"), path_src, C.dim_src, C.bos, C.eos, C.unk)
+vocab_tgt = spm(pform(P.data, "vocab_tgt"), path_tgt, C.dim_tgt, C.bos, C.eos, C.unk)
+
+#############
+# load data #
+#############
+
+src_tgt = list(zip(load_txt(path_src), load_txt(path_tgt)))
 np.random.seed(C.seed)
 np.random.shuffle(src_tgt)
-src_valid, tgt_valid = zip(*src_tgt[:C.batch_valid * 5])
-src_train, tgt_train = zip(*src_tgt[C.batch_valid * 5:])
-del src_tgt
 
-###############
-# build index #
-###############
+####################
+# filter and split #
+####################
 
-chars = Counter(chain(diter(src_train, 2), diter(tgt_train, 2)))
-index = "".join(vocab(chars, specials= "\xa0\n "))
-save_pkl(pform(P.data, P.idx), index)
-save_txt(pform(P.data, P.src), src_valid)
-save_txt(pform(P.data, P.tgt), tgt_valid)
+train_src = []
+train_tgt = []
+valid_src = []
+valid_tgt = []
+valid_raw = []
+for src, tgt in src_tgt:
+    s = vocab_src.encode_as_ids(src)
+    t = vocab_tgt.encode_as_ids(tgt)
+    if C.cap < len(s) or C.cap < len(t): continue
+    if len(valid_raw) < C.total_valid:
+        valid_src.append(s)
+        valid_tgt.append(t)
+        valid_raw.append(tgt)
+    else:
+        train_src.append(src)
+        train_tgt.append(tgt)
 
 #############
 # save data #
 #############
 
-idx = PointedIndex(index)
-np.save(pform(P.data, "valid_src.npy"), encode(idx, src_valid, C.cap, np.uint8))
-np.save(pform(P.data, "valid_tgt.npy"), encode(idx, tgt_valid, C.cap, np.uint8))
-np.save(pform(P.data, "train_src.npy"), encode(idx, src_train, C.cap, np.uint8))
-np.save(pform(P.data, "train_tgt.npy"), encode(idx, tgt_train, C.cap, np.uint8))
+save_txt(pform(P.data, "train_src.txt"), train_src)
+save_txt(pform(P.data, "train_tgt.txt"), train_tgt)
+save_txt(pform(P.data, "valid_tgt.txt"), valid_raw)
+np.save(pform(P.data, "valid_tgt.npy"), vpack(valid_tgt, (C.total_valid, C.cap), C.eos, np.uint16))
+np.save(pform(P.data, "valid_src.npy"), vpack(valid_src, (C.total_valid, C.cap), C.eos, np.uint16))

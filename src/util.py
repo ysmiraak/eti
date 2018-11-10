@@ -13,7 +13,7 @@ def comp(g, f, *fs):
     return lambda x: g(f(x))
 
 
-def diter(xs, depth= 2):
+def diter(depth, xs):
     """like `iter` but yields items at `depth`."""
     if depth:
         for x in xs:
@@ -56,61 +56,3 @@ class Record(Mapping):
 def select(record, *keys):
     """returns a Record with only entries under `keys` in `record`."""
     return Record({k: record[k] for k in keys})
-
-
-class PointedIndex(Mapping):
-    """takes a vector of unique objects `vec` and a base index `nil`
-    within its range, returns a pointed `index`, such that:
-
-    `index[i]` returns the object at index `i`;
-
-    `index(x)` returns the index of object `x`;
-
-    bijective for all indices and objects within `vec`;
-
-    otherwise `index(x) = nil` and `index[i] = vec[nil]`.
-
-    """
-
-    def __init__(self, vec, nil= 0):
-        assert nil < len(vec)
-        self._nil = nil
-        self._vec = vec
-        self._map = {x: i for i, x in enumerate(vec)}
-
-    def __repr__(self):
-        return "{}(vec= {}, nil= {})".format(
-            type(self).__name__
-            , repr(self._vec)
-            , repr(self._nil))
-
-    def __iter__(self):
-        return iter(self._vec)
-
-    def __len__(self):
-        return len(self._vec)
-
-    def __getitem__(self, idx):
-        try:
-            return self._vec[idx]
-        except IndexError:
-            return self._vec[self._nil]
-
-    def __call__(self, obj):
-        try:
-            return self._map[obj]
-        except KeyError:
-            return self._nil
-
-    def __eq__(self, other):
-        return type(self) is type(other) \
-            and self._nil == other._nil \
-            and self._vec == other._vec
-
-    @property
-    def vec(self):
-        return self._vec
-
-    @property
-    def nil(self):
-        return self._nil
