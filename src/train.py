@@ -34,7 +34,7 @@ def batch(batch= C.batch_train
             bas, bat = [], []
         s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
         t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
-        if len(s) <= cap and len(t) <= cap:
+        if 0 < len(s) <= cap and 0 < len(t) <= cap:
             bas.append(s)
             bat.append(t)
 
@@ -89,7 +89,7 @@ def trans(sents, model= infer):
     for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_valid):
         yield from decode(vocab_tgt, preds)
 
-for _ in range(5):
+for _ in range(1):
     for _ in range(400):
         for _ in tqdm(range(250), ncols= 70):
             sess.run(train.up)
