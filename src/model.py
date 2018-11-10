@@ -110,6 +110,8 @@ class Transformer(Record):
             logit= Affine(dim_tgt, dim_emb, 'logit')
             , encode= encode
             , emb_src= Linear(dim_emb, dim_src, 'emb_src')
+            , dim_emb= dim_emb
+            , dim_tgt= dim_tgt
             , eos= eos
             , cap= cap)
 
