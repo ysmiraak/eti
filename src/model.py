@@ -123,7 +123,6 @@ class Transformer(Record):
             , emb_src= Linear(dim_emb, dim_src, 'emb_src')
             , dim_emb= dim_emb
             , dim_tgt= dim_tgt
-            , bos= bos
             , eos= eos
             , cap= cap)
 
