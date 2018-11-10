@@ -1,0 +1,53 @@
+spm_train
+
+--accept_language (comma-separated list of languages this model can accept)  type: string  default:
+--add_dummy_prefix (Add dummy whitespace at the beginning of text)  type: bool  default: true
+--bos_id (Override BOS (<s>) id. Set -1 to disable BOS.)  type: int32  default: 1
+--character_coverage (character coverage to determine the minimum symbols)  type: double  default: 0.9995
+--control_symbols (comma separated list of control symbols)  type: string  default:
+--eos_id (Override EOS (</s>) id. Set -1 to disable EOS.)  type: int32  default: 2
+--hard_vocab_limit (If set to false, --vocab_size is considered as a soft limit.)  type: bool  default: true
+--input (comma separated list of input sentences)  type: string  default:
+--input_format (Input format. Supported format is `text` or `tsv`.)  type: string  default:
+--input_sentence_size (maximum size of sentences the trainer loads)  type: int32  default: 10000000
+--max_sentencepiece_length (maximum length of sentence piece)  type: int32  default: 16
+--mining_sentence_size (maximum size of sentences to make seed sentence piece)  type: int32  default: 2000000
+--model_prefix (output model prefix)  type: string  default:
+--model_type (model algorithm: unigram, bpe, word or char)  type: string  default: unigram
+--normalization_rule_name (Normalization rule name. Choose from nfkc or identity)  type: string  default: nmt_nfkc
+--normalization_rule_tsv (Normalization rule TSV file. )  type: string  default:
+--num_sub_iterations (number of EM sub-iterations)  type: int32  default: 2
+--num_threads (number of threads for training)  type: int32  default: 16
+--pad_id (Override PAD (<pad>) id. Set -1 to disable PAD.)  type: int32  default: -1
+--remove_extra_whitespaces (Removes leading, trailing, and duplicate internal whitespace)  type: bool  default: true
+--seed_sentencepiece_size (the size of seed sentencepieces)  type: int32  default: 1000000
+--self_test_sample_size (the size of self test samples)  type: int32  default: 0
+--shrinking_factor (Keeps top shrinking_factor pieces with respect to the loss)  type: double  default: 0.75
+--split_by_unicode_script (use Unicode script to split sentence pieces)  type: bool  default: true
+--split_by_whitespace (use a white space to split sentence pieces)  type: bool  default: true
+--training_sentence_size (maximum size of sentences to train sentence pieces)  type: int32  default: 10000000
+--unk_id (Override UNK (<unk>) id.)  type: int32  default: 0
+--unk_surface (Dummy surface string for <unk>. In decoding <unk> is decoded to `unk_surface`.)  type: string  default:  ⁇
+--use_all_vocab (If set to true, use all tokens as vocab. Valid for word/char models.)  type: bool  default: false
+--user_defined_symbols (comma separated list of user defined symbols)  type: string  default:
+--vocab_size (vocabulary size)  type: int32  default: 8000
+
+spm_encode
+
+--alpha (Smoothing parameter for sampling mode.)  type: double  default: 0.5
+--extra_options (':' separated encoder extra options, e.g., "reverse:bos:eos")  type: string  default:
+--generate_vocabulary (Generates vocabulary file instead of segmentation)  type: bool  default: false
+--model (model file name)  type: string  default:
+--nbest_size (NBest size)  type: int32  default: 10
+--output (output filename)  type: string  default:
+--output_format (choose from piece, id, proto, nbest_piece, nbest_id, or nbest_proto)  type: string  default: piece
+--vocabulary (Restrict the vocabulary. The encoder only emits the tokens in "vocabulary" file)  type: string  default:
+--vocabulary_threshold (Words with frequency < threshold will be treated as OOV)  type: int32  default: 0
+
+spm_decode
+
+--extra_options (':' separated encoder extra options, e.g., "reverse:bos:eos")  type: string  default:
+--input_format (choose from piece or id)  type: string  default: piece
+--model (model file name)  type: string  default:
+--output (output filename)  type: string  default:
+--output_format (choose from string or proto)  type: string  default: string
