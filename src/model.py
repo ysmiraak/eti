@@ -100,8 +100,7 @@ class Transformer(Record):
 
            logit : Affine
           decode : tuple EncodeBlock
-          bridge : EncodeBlock
-          encode : tuple EncodeBlock
+          encode : tuple DecodeBlock
         mask_tgt : f32 (1, t, t)
          emb_pos : Linear
          emb_src : Linear
@@ -111,12 +110,11 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            decode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
             mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
         return Transformer(
             logit= Affine(dim_tgt, dim_emb, 'logit')
             , decode= decode
-            , bridge= EncodeBlock(dim_emb, dim_mid, act, "bridge")
             , encode= encode
             , mask_tgt= mask_tgt
             , emb_pos= Linear(dim_emb, cap, 'emb_pos')
@@ -188,11 +186,9 @@ class Transformer(Record):
         # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        # bridge mask disables padding steps in source
-        x = self.bridge(x, self.mask, dropout, w, 'bridge_')
         # target mask disables current step
         with tf.variable_scope('decode_'):
-            for dec in self.decode: x = dec(x, self.mask_tgt, dropout)
+            for dec in self.decode: x = dec(x, x, w, self.mask, dropout, self.mask_tgt)
         y = self.logit(x, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)

@@ -2,8 +2,7 @@
 
 - a encoder-decoder, autoregressive (autoreg)
 - s straight seq2seq (straight)
-- v encoder-bridge-decoder, nonautoregressive (master)
-- p encoder-decoder, nonautoregressive (position)
+- v encoder-decoder, nonautoregressive (master)
 
 - i iterated decoder, nonautoregressive (variational)
 - j iterated decoder from embedding to logit (variational-for-real)
