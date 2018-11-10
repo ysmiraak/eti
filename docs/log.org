@@ -1,10 +1,9 @@
 * trial
 
 - a encoder-decoder, autoregressive (autoreg)
-- s straight seq2seq, weighted loss (straight)
-- n encoder-bridge-decoder, nonautoregressive, weighted loss (master)
-- o encoder-bridge-decoder, nonautoregressive, nonweighted loss (master)
-- p encoder-decoder, nonautoregressive, weighted loss (position)
+- s straight seq2seq (straight)
+- v encoder-bridge-decoder, nonautoregressive (master)
+- p encoder-decoder, nonautoregressive (position)
 
 * findings
 
@@ -15,6 +14,14 @@ should simply trust in itself.
 
 found: the mask is useful.  the model does not learn as fast without
 the mask
+
+** weighted loss over seq
+
+apply linearly increasing weights on the loss over sequence 1,2,3,...,t,1,...,1
+
+does not seem to work and even hinders learning
+
+maybe soften the weights by sqrt?
 
 * todo
 
