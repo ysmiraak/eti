@@ -35,14 +35,14 @@ valid_raw = []
 for src, tgt in src_tgt:
     s = vocab_src.encode_as_ids(src)
     t = vocab_tgt.encode_as_ids(tgt)
-    if C.cap < len(s) or C.cap < len(t): continue
-    if len(valid_raw) < C.total_valid:
-        valid_src.append(s)
-        valid_tgt.append(t)
-        valid_raw.append(tgt)
-    else:
-        train_src.append(src)
-        train_tgt.append(tgt)
+    if 0 < len(s) <= C.cap and 0 < len(t) <= C.cap:
+        if len(valid_raw) < C.total_valid:
+            valid_src.append(s)
+            valid_tgt.append(t)
+            valid_raw.append(tgt)
+        else:
+            train_src.append(src)
+            train_tgt.append(tgt)
 
 #############
 # save data #
