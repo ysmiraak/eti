@@ -4,6 +4,12 @@ non-autoregressive model
 - scheduled sampling is slow
 - beam-search is a hack
 
+* kingma et al. 2016
+
+https://arxiv.org/abs/1606.04934
+
+- inverse autoregressive flows
+
 * van den oord et al. 2017
 
 https://arxiv.org/abs/1711.10433
