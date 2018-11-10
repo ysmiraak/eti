@@ -4,7 +4,6 @@
 - s straight seq2seq (straight)
 - v encoder-bridge-decoder, nonautoregressive (master)
 - p encoder-decoder, nonautoregressive (position)
-- q like p but with decoder causal mask (position-causal)
 
 - i iterated decoder, nonautoregressive (variational)
 - l like p but with linear weight over loss (postion-weighted-linear)
@@ -40,7 +39,9 @@ maybe soften the weights by sqrt?
 
 * todo
 
-investigate the cause for indecisiveness of middle steps
+try decoder with tgt embedding (transposed logit),
+no causal mask,
+but very high dropout
 
 ** try use emb_pos as position encoding
 
