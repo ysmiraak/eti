@@ -189,7 +189,7 @@ class Transformer(Record):
             x = self.position.pos + self.emb_pos.kern + (
                 self.emb_tgt.embed(self.gold)
                 * tf.to_float(
-                    tf.nn.sigmoid(- tf.to_float(step) / 1e6)
+                    tf.nn.sigmoid(- tf.to_float(self.step) / 1e6)
                     < tf.random_uniform((shape[0], self.cap, self.dim_emb))))
 
         # source mask disables current step and padding steps
