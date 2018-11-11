@@ -111,13 +111,19 @@ class Transformer(Record):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
             decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
+            mask_tgt = tf.log(1 - tf.eye(cap))
+        logit = Linear(dim_tgt, dim_emb, 'logit')
+        step = tf.train.get_or_create_global_step()
+        with tf.variable_scope('droptgt'):
+            droptgt = Dropout(tf.nn.sigmoid(- tf.to_float(step) / 1e6), (None, None, dim_emb), 'droptgt')
         return Transformer(
-            logit= Affine(dim_tgt, dim_emb, 'logit')
+            logit= logit, step= step
+            , droptgt = droptgt
             , decode= decode
             , encode= encode
             , mask_tgt= mask_tgt
             , emb_pos= Linear(dim_emb, cap, 'emb_pos')
+            , emb_tgt= logit.transpose('emb_tgt')
             , emb_src= Linear(dim_emb, dim_src, 'emb_src')
             , dim_emb= dim_emb
             , dim_tgt= dim_tgt
@@ -141,7 +147,7 @@ class Transformer(Record):
             not_eos = tf.to_float(tf.not_equal(src_, self.eos))
             len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], 1)
-            mask_src = tf.log(not_eos + tf.expand_dims(1 - tf.eye(len_src), 0))
+            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
             mask = tf.log(not_eos)
             src = src_[:,:len_src]
         with tf.variable_scope('tgt'):
@@ -180,9 +186,10 @@ class Transformer(Record):
         with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-        # decoder input is trained position embedding only
-        with tf.variable_scope('emb_pos_'):
-            x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
+        # decoder input is position encoding + trained position embedding
+        # + target embedding with increasing dropout
+        with tf.variable_scope('emb_tgt_'):
+            x = self.position.pos + self.emb_pos.kern + self.droptgt(self.emb_tgt.embed(self.gold))
         # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
@@ -213,12 +220,12 @@ class Transformer(Record):
           up :        update operation
 
         """
+        s = self.step
         with tf.variable_scope('lr'):
-            s = tf.train.get_or_create_global_step()
             t = tf.to_float(s + 1)
             lr = (self.dim_emb ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
         up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
-        return Transformer(step= s, lr= lr, up= up, **self)
+        return Transformer(lr= lr, up= up, **self)
 
 
 def batch_run(sess, model, fetch, src, tgt= None, batch= None):
