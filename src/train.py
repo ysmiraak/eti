@@ -81,11 +81,11 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
         , batch= C.batch_valid)))
     wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
 
-def trans(sents, model= valid):
-    if not isinstance(sents, np.ndarray):
-        sents = encode(vocab_src, sents, C.cap, np.int32)
-    for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_valid):
-        yield from decode(vocab_tgt, preds)
+def trans(src, tgt, model= valid):
+    if not isinstance(src, np.ndarray): src = encode(vocab_src, src, C.cap, np.int32)
+    if not isinstance(tgt, np.ndarray): tgt = encode(vocab_tgt, tgt, C.cap, np.int32)
+    for prd in batch_run(sess, model, model.pred, src, tgt, batch= C.batch_valid):
+        yield from decode(vocab_tgt, prd)
 
 for _ in range(1):
     for _ in range(400):
@@ -94,4 +94,4 @@ for _ in range(1):
         step = sess.run(train.step)
         summ(step)
     saver.save(sess, pform(P.ckpt, C.trial, step // 100000), write_meta_graph= False)
-    save_txt(pform(P.pred, C.trial, step // 100000), trans(src_valid))
+    save_txt(pform(P.pred, C.trial, step // 100000), trans(src_valid, tgt_valid))
