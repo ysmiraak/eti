@@ -1,0 +1,258 @@
+#+TITLE: nonautoregressive seq2seq
+#+AUTHOR: kuan yu
+
+* formally
+
+let \(S\) and \(T\) be vocabularies, or rather spaces of distribution over vocabularies.
+
+the notion of a sequence of length \(l : \mathcal{N}\) can be defined in the language of [[https://ncatlab.org/nlab/show/dependent+type][dependent type theory]] as follows.
+
+\begin{align*}
+[l] &= \{ 0 , \ldots , l \}\\
+T^{l} &= [l] \to T\\
+&= \prod_{n : [l]} T^{n} \to T\\
+\end{align*}
+
+the [[https://ncatlab.org/nlab/show/dependent+product+type][dependent product]] \(\prod_{n : [l]} T^{n} \to T\) is a family of function types from every \(n\)-ary product of \(T\) to \(T\),
+namely \(T^{0} \to T\) and \(T^{1} \to T\) and ... and \(T^{l-1} \to T\), where \(T^{0}\) is the nullary product aka the unit type.
+intuitively, if we start from the unit object and construct the sequence with these functions step by step,
+it is the same as having a function which constructs the sequence and gives random access to its components.
+the dependent product factorization is what gives us autoregressive models.
+
+fixing a length \(l : \mathcal{N}\), we can give these equivalent discriptions for a seq2seq model.
+
+\begin{align*}
+       &S^{l} \to T^{l} &&\textrm{straight mapping}\\
+=\quad &S^{l} \to [l] \to T &&\textrm{nonautoregressive}\\
+=\quad &S^{l} \to \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
+\end{align*}
+
+in general, for sequences of variable lengths, we have these seq2seq models.
+
+\begin{align*}
+       &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} [l] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
+\end{align*}
+
+the [[https://ncatlab.org/nlab/show/dependent+sum][dependent sum]] \(\sum_{l : \mathcal{N}} T^{l}\) asserts the existence of target sequences of some length.
+the prediction of target lengths can be incorporated into the models as follows.
+
+\begin{align*}
+       &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} [f s] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} \prod_{n : [f s]} T^{n} \to T &&\textrm{autoregressive}\\
+\end{align*}
+
+we can check that the length predicted models are a subset of the general models with the proof
+\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right)\).
+
+* why
+
+autoregressive models are the standard for sequence modeling.
+it fits the structure of recurrent networks,
+even though it is usually trained with [[https://dl.acm.org/citation.cfm?id=1351135][teacher-forcing]].
+with convolutional and self-attentive networks,
+as well as recurrent networks with no hidden-to-hidden connections,
+teacher-forcing make the training of all steps parallelizable.
+however during inference they all have to run sequentially.
+and autoregressive inference involes an exponentially increasing search space.
+greedy decoding gives suboptimal results,
+and the beam search is commonly used as the remedy,
+which is ad hoc and expensive.
+autoregressive models are intrinsically slow.
+on top of that, teacher-forcing training makes the model less robust during inference,
+where it encounters partial sequences unlike the groundtruth ones provided during training.
+remedies such as [[https://arxiv.org/abs/1506.03099][scheduled sampling]] can be applied,
+however these remedies are also ad hoc and expensive.
+
+it has been observed that the partial sequences provided during autoregressive decoding can be defective.
+in fact in training variational autoencoders for language modeling,
+as suggested by [[https://arxiv.org/abs/1511.06349][bowman et al. (2015)]],
+providing defective partial sequences by randomly dropping words during training
+is used to regularize the decoder,
+so that it does not simply becomes a language model alone and ignores the encoder.
+[[https://arxiv.org/abs/1710.10380][tang et al. (2018)]] trained models for sentence representation learning
+with teacher-forcing (perfect partial sequences) and random sampling (defect partial sequences),
+and found that they achieve equivalent results.
+they further experimented with nonautoregressive convolutional decoders which predict all words simultanously,
+and found them to be equivalent to autoregressive ones.
+this is however not what people usually find with nonautoregressive models.
+usually nonautoregressive perform worse than autoregressive ones.
+
+an effective non ad hoc nonautoregressive architecture is still to be discovered.
+
+* how
+
+most of the research comes from machine translation, unless mentioned otherwise.
+
+** batched decoding
+
+one remedy is to shorten the autoregressive steps by batching multiple predictions at once.
+in tacotron [[https://arxiv.org/abs/1703.10135][wang et al. (2017)]] found that predicting multiple frames at once
+in fact helped learning the attention alignment between the decoder and the encoder.
+
+[[https://arxiv.org/abs/1808.08583][wang et al. (2018)]] used this approach which they dubbed semi-autoregressive.
+the decoder produces a shorter hidden sequence autoregressive,
+then the full sequence is produced in parallel from the hidden sequence.
+
+** alternative decoding
+
+[[https://arxiv.org/abs/1702.02429][gu et al. (2017)]]
+[[https://arxiv.org/abs/1804.07915][chen et al. (2018)]]
+- trainable greedy decoding
+- actor network
+
+** alternative input
+
+[[https://arxiv.org/abs/1711.02281][gu et al. (2018)]]
+- non-autoregressive
+- fertility feature
+- self-attention current position mask
+
+** iterative refinement
+
+[[https://arxiv.org/abs/1802.06901][lee et al. (2018)]]
+- deterministic non-autoregressive sequence modeling
+- iterative refinement
+
+** latent models
+
+[[https://arxiv.org/abs/1711.10433][van den oord et al. (2017)]]
+- parallel wavenet
+- probability density distillation
+- inverse autoregressive flows [[https://arxiv.org/abs/1606.04934][kingma et al. (2016)]]
+
+[[https://arxiv.org/abs/1806.04550][schmidt & hofmann (2018)]]
+- unconditional word generation
+- state space model
+- variational inference
+
+[[https://arxiv.org/abs/1805.11063][roy et al. (2018)]]
+- vector quentized vae
+
+[[https://arxiv.org/abs/1803.03382][kaiser et al. (2018)]]
+- autoregressive discrete latent variables
+- parallel decoding from latent sequence
+- decomposed vector quantization
+
+** summary
+
+even though autoregressive, nonautoregressive, and straight mapping are equivalent descriptions,
+they are not equivalent in modeling difficulties.
+one may put this under intentionality and expressiveness.
+consider the fibonacci sequence,
+one can predict a member at any position given its two predecessors,
+but it is difficult to predict the member unconditionally.
+without memoization, the member has to be found recursively.
+autoregressive models explicitely models the recursive ([[https://ncatlab.org/nlab/show/cocycle][anamorphic]]) computation.
+
+without the autoregressive structure,
+the dependencies between the steps have to be factorized and modeled elsewhere.
+the decoder must accept some input for every step which faciliates this factorization.
+for autoregressive decoders, this input is the partial sequence, and the factorization is the sequential structure.
+this input can be defective, but it may have to be different for every sequence.
+
+suppose this input can be constant,
+it would mean that the target steps are independent given the encoder outputs.
+this may as well be true.
+even though a source sentence have many target translations,
+we only want one of them which is ideally the optimal translation.
+however the model fails to learn with position-wise cross-entropy training.
+so either we change the training strategy,
+or we find some decoder inputs for different sequences.
+i file them under training strategies and modeling strategies.
+
+* training strategies
+
+consider a decoder which accepts only the encoder outputs as the input,
+namely a straight mapping model.
+
+it may additionally use some other trained information to query the encoder outputs.
+the trained information is only dependent on the decoding position,
+namely a position embedding.
+
+** weighted loss over sequence
+
+the model is capable of contructing the first few steps just fine.
+the softmax probabilities for the first few steps (as well as the final padding positions) are high (over 60%),
+but it degrades under 20% very soon and outputs only whitespaces.
+we also observe this in an autoregressive model where instead of feeding discrete inputs,
+we feed the softmax probabilities to multiple with the embedding matrix.
+the accumulation of uncertainties makes the model less and less confident until it cannot make a decision.
+why this happens for a nonautoregressive model with no sequential structure?
+
+consider applying linearly increasing weights on the loss over a sequence of length \(t\):
+\([1 , 2 , 3 , \ldots , t, 1 , \ldots , 1]\).
+
+so far does not seem to work and even hinders learning.
+and it hinders less when i softened the weights by sqrt.
+
+** target dropout
+
+consider a denoising decoder which takes a target sequence and predict the same sequence,
+with no causal mask but a very high dropout rate.
+similar idea as feeding defect sequences.
+increase the dropout rate over time, from 50% to 100% by the logistic curve,
+specifically \(\operatorname{sigmoid}\left( s / 1e5 \right)\) where \(s\) is the training step.
+
+we add the position embedding to the embedded target sequence.
+after the dropout rate reaches almost 100%,
+we can simply omit the target sequence,
+if the model still works.
+
+i used a custom dropout where the values are not scaled up,
+since when the dropout rate reaches 100%,
+that scale will become too high and cause numeric problems.
+
+so far the model seems happy.
+
+** word dropout
+
+similar to target dropout, but drop entire words.
+always drop the current word.
+
+todo
+
+two methods:
+1. word embedding | position embedding + sinusoidal encoding, randomly swap out word vectors with position vectors
+2. word embedding + position embedding, randomly mask out word vectors
+
+** iterative refinement
+
+train a logit vector over the target vocabulary for every position.
+this replaces the position embedding when softmaxed and mutiplied with the target embedding.
+the logit inputs are a crude approximation to the target logits.
+from this, the decoder predicts better logits.
+take the better logits again as inputs.
+iterate this process 4 times with the same decoder parameters.
+we take the final logits as outputs,
+but compute loss for all 4 intermediate logits, and backprop together.
+
+i used only one decoder layer instead of two,
+but it still made training 3 times slower.
+so far this does not seem to do good.
+it got to the same loss and accuracy as before.
+the output translations seem more erratic.
+
+todo this should be a case of variational inference, find out more
+
+* modeling strategies
+
+todo cf latent models
+
+* misc
+
+** masking current step in self-attention
+
+the current step almost always gets the highest attention weight,
+but it is not necessary to consider itself since the residual connection will add itself back anyways.
+[[https://arxiv.org/abs/1711.02281][gu et al. (2018)]] suggested masking current steps.
+on the other hand, if the other steps offer no valuable info, current step should simply trust in itself.
+
+empirically i found that the mask is useful.
+the model does not learn as fast without the mask.
+
+however when causal mask is present to enforce the autoregressive structure,
+adding this mask means that the first and the last steps have nothing to attend to,
+which results in nans.

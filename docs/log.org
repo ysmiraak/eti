@@ -14,35 +14,13 @@
 |    |                         |                                                      |
 | d  | droptgt                 | like v but with target input with increasing dropout |
 
-* findings
-
-** masking current step
-
-thought:
-
-if the other steps offer no valuable info,
-current step should simply trust in itself.
-
-found:
-
-the mask is useful.
-the model does not learn as fast without the mask.
-
-however when causal mask is present,
-this means that the first and last step in self-attention
-have no values to attend to,
-which results in nans
-
-** weighted loss over seq
-
-apply linearly increasing weights on the loss over sequence
-1,2,3,...,t,1,...,1
-
-does not seem to work and even hinders learning
-
-maybe soften the weights by sqrt?
-
 * todo
+
+** try word dropout
+
+randomly swap embeded target with embedded position
+
+with an increasing swap rate
 
 ** try use emb_pos as position encoding
 
