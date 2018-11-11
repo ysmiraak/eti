@@ -142,7 +142,7 @@ class Transformer(Record):
             not_eos = tf.to_float(tf.not_equal(src_, self.eos))
             len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], 1)
-            mask_src = tf.log(not_eos + tf.expand_dims(1 - tf.eye(len_src), 0))
+            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
             mask = tf.log(not_eos)
             src = src_[:,:len_src]
             init = self.bos + tf.zeros_like(src_[:,:1])
