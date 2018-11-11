@@ -128,7 +128,7 @@ class Transformer(Record):
         """
         with tf.variable_scope('src'):
             src_ = placeholder(tf.int32, (None, None), src)
-            mask = tf.log(tf.expand_dims(1 - tf.eye(self.cap), 0))
+            mask = tf.log(1 - tf.eye(self.cap))
         with tf.variable_scope('tgt'):
             tgt_ = placeholder(tf.int32, (None, None), tgt)
         return Transformer(
