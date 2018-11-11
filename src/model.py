@@ -182,22 +182,23 @@ class Transformer(Record):
         with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-
-        # decoder input is position encoding + trained position embedding
-        # + target embedding with increasing dropout
-        with tf.variable_scope('emb_tgt_'):
-            x = self.position.pos + self.emb_pos.kern + (
-                self.emb_tgt.embed(self.gold)
-                * tf.to_float(
-                    tf.nn.sigmoid(tf.to_float(self.step) / 1e5)
-                    < tf.random_uniform((shape[0], self.cap, self.dim_emb))))
-
         # source mask disables current step and padding steps
         with tf.variable_scope('encode_'):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
+
+        # decoder input is trained position embedding
+        with tf.variable_scope('emb_pos_'):
+            x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
+        # and target embedding with increasing dropout
+        with tf.variable_scope('emb_tgt_'):
+            v = x + ((self.position.pos + self.emb_tgt.embed(self.gold))
+                     * tf.to_float(
+                         tf.nn.sigmoid(tf.to_float(self.step) / 1e5)
+                         < tf.random_uniform((shape[0], self.cap, self.dim_emb))))
         # target mask disables current step
         with tf.variable_scope('decode_'):
-            for dec in self.decode: x = dec(x, x, w, self.mask, dropout, self.mask_tgt)
+            for dec in self.decode: x = v = dec(x, v, w, self.mask, dropout, self.mask_tgt)
+
         y = self.logit(x, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)

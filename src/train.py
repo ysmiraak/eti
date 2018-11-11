@@ -87,7 +87,7 @@ def trans(src, tgt, model= valid):
     for prd in batch_run(sess, model, model.pred, src, tgt, batch= C.batch_valid):
         yield from decode(vocab_tgt, prd)
 
-for _ in range(1):
+for _ in range(5):
     for _ in range(400):
         for _ in tqdm(range(250), ncols= 70):
             sess.run(train.up)
