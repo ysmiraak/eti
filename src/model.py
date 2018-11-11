@@ -110,8 +110,8 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            decode = DecodeBlock(dim_emb, dim_mid, act, "layer")
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
+            decode = DecodeBlock(dim_emb, dim_mid, act, "decode")
+            mask_tgt = tf.log(1 - tf.eye(cap))
         return Transformer(
             logit= Affine(dim_tgt, dim_emb, 'logit')
             , decode= decode
@@ -142,7 +142,7 @@ class Transformer(Record):
             not_eos = tf.to_float(tf.not_equal(src_, self.eos))
             len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], 1)
-            mask_src = tf.log(not_eos + tf.expand_dims(1 - tf.eye(len_src), 0))
+            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
             mask = tf.log(not_eos)
             src = src_[:,:len_src]
         with tf.variable_scope('tgt'):
@@ -186,15 +186,15 @@ class Transformer(Record):
             for enc in self.encode: w = enc(w, self.mask_src, dropout)
 
         # 4 level variational inference
-        ys, y = [], tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1))
+        ys, x = [], tf.tile(tf.expand_dims(tf.nn.softmax(self.emb_pos.kern), 0), (shape[0], 1, 1))
         for lvl in range(4):
             with tf.variable_scope('lvl{}_'.format(lvl)):
                 with tf.variable_scope('emb_tgt_'):
-                    x = self.position.pos + dropout(self.emb_tgt(tf.nn.softmax(y)))
-                with tf.variable_scope('decode_'):
-                    x = self.decode(x, x, w, self.mask, dropout, self.mask_tgt)
+                    x = self.position.pos + dropout(self.emb_tgt(x))
+                x = self.decode(x, x, w, self.mask, dropout, self.mask_tgt, 'decode_')
                 y = self.logit(x, 'logit_')
                 ys.append(y)
+                x = tf.nn.softmax(y)
 
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
