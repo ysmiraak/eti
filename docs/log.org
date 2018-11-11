@@ -1,18 +1,14 @@
 * trial
 
-| id | branch                  | info                                                 |
-|----+-------------------------+------------------------------------------------------|
-| a  | autoreg                 | encoder-decoder, autoregressive                      |
-| s  | straight                | straight seq2seq                                     |
-| v  | master                  | encoder-decoder, nonautoregressive                   |
-|    |                         |                                                      |
-| i  | variational             | iterated decoder, nonautoregressive                  |
-| j  | variational-for-real    | iterated decoder from embedding to logit             |
-|    |                         |                                                      |
-| l  | postion-weighted-linear | like v but with linear weight over loss              |
-| r  | postion-weighted-sqrt   | like v but with sqrt weight over loss                |
-|    |                         |                                                      |
-| d  | droptgt                 | like v but with target input with increasing dropout |
+| id | branch    | info                                                 |
+|----+-----------+------------------------------------------------------|
+| a  | autoreg   | encoder-decoder, autoregressive                      |
+| s  | straight  | straight seq2seq                                     |
+| v  | master    | encoder-decoder, nonautoregressive                   |
+|    |           |                                                      |
+| j  | iterative | iterated decoder                                     |
+|    |           |                                                      |
+| d  | droptgt   | like v but with target input with increasing dropout |
 
 * todo
 
