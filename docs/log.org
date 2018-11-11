@@ -6,7 +6,7 @@
 | s  | straight  | straight seq2seq                                     |
 | v  | master    | encoder-decoder, nonautoregressive                   |
 |    |           |                                                      |
-| j  | iterative | iterated decoder                                     |
+| i  | iterative | iterated decoder                                     |
 |    |           |                                                      |
 | d  | droptgt   | like v but with target input with increasing dropout |
 

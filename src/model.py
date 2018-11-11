@@ -111,7 +111,7 @@ class Transformer(Record):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
             decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
-            mask_tgt = tf.log(tf.expand_dims(1 - tf.eye(cap), 0))
+            mask_tgt = tf.log(1 - tf.eye(cap))
         return Transformer(
             logit= Affine(dim_tgt, dim_emb, 'logit')
             , decode= decode
@@ -141,7 +141,7 @@ class Transformer(Record):
             not_eos = tf.to_float(tf.not_equal(src_, self.eos))
             len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], 1)
-            mask_src = tf.log(not_eos + tf.expand_dims(1 - tf.eye(len_src), 0))
+            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
             mask = tf.log(not_eos)
             src = src_[:,:len_src]
         with tf.variable_scope('tgt'):
