@@ -45,7 +45,7 @@ the prediction of target lengths can be incorporated into the models as follows.
 \end{align*}
 
 we can check that the length predicted models are a subset of the general models with the proof
-\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right)\).
+\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right) : \left( \prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} \right) \to \left( \prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} \right)\).
 
 * why
 
