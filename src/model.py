@@ -51,10 +51,9 @@ class EncodeBlock(Record):
                 self.mlp = Multilayer(dim, dim, dim_mid, act)
                 self.norm_mlp = Normalize(dim)
 
-    def __call__(self, x, mask, dropout, w= None, name= None):
-        if w is None: w = x
+    def __call__(self, x, v, m, dropout, name= None):
         with tf.variable_scope(name or self.name):
-            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, w, mask)))
+            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, v, m)))
             with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
             return x
 
@@ -64,21 +63,13 @@ class DecodeBlock(Record):
     def __init__(self, dim, dim_mid, act, name):
         self.name = name
         with tf.variable_scope(name):
-            with tf.variable_scope('csl'):
-                self.csl = Attention(dim, layer= Multilayer, mid= dim_mid, act= act)
-                self.norm_csl = Normalize(dim)
-            with tf.variable_scope('att'):
-                self.att = Attention(dim, layer= Multilayer, mid= dim_mid, act= act)
-                self.norm_att = Normalize(dim)
-            with tf.variable_scope('mlp'):
-                self.mlp = Multilayer(dim, dim, dim_mid, act)
-                self.norm_mlp = Normalize(dim)
+            self.internal = EncodeBlock(dim, dim_mid, act, 'internal')
+            self.external = EncodeBlock(dim, dim_mid, act, 'external')
 
-    def __call__(self, x, v, w, m, dropout, mask= None, name= None):
+    def __call__(self, x, v, m, w, n, dropout, name= None):
         with tf.variable_scope(name or self.name):
-            with tf.variable_scope('csl'): x = self.norm_csl(x + dropout(self.csl(x, v, mask)))
-            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, w, m)))
-            with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
+            x = self.internal(x, v, m, dropout)
+            x = self.external(x, w, n, dropout)
             return x
 
 
@@ -110,10 +101,15 @@ class Transformer(Record):
         with tf.variable_scope('encode'):
             encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         with tf.variable_scope('decode'):
-            decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            ante   = EncodeBlock(dim_emb, dim_mid, act, 'ante')
+            decode = DecodeBlock(dim_emb, dim_mid, act, 'decode')
+            post   = EncodeBlock(dim_emb, dim_mid, act, 'post')
+        with tf.variable_scope('mask_tgt'):
             mask_tgt = tf.log(1 - tf.eye(cap))
         return Transformer(
             logit= Affine(dim_tgt, dim_emb, 'logit')
+            , ante= ante
+            , post= post
             , decode= decode
             , encode= encode
             , mask_tgt= mask_tgt
@@ -136,16 +132,19 @@ class Transformer(Record):
         mask_src : f32 (b, s, s) source mask
 
         """
+        src_ = placeholder(tf.int32, (None, None), src, 'src_')
+        tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
         with tf.variable_scope('src'):
-            src_ = placeholder(tf.int32, (None, None), src)
-            not_eos = tf.to_float(tf.not_equal(src_, self.eos))
-            len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
+            with tf.variable_scope('not_eos'):
+                not_eos = tf.to_float(tf.not_equal(src_, self.eos))
+            with tf.variable_scope('len_src'):
+                len_src = tf.reduce_sum(tf.to_int32(0 < tf.reduce_sum(not_eos, 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], 1)
-            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
-            mask = tf.log(not_eos)
             src = src_[:,:len_src]
-        with tf.variable_scope('tgt'):
-            tgt_ = placeholder(tf.int32, (None, None), tgt)
+        with tf.variable_scope('mask_src'):
+            mask_src = tf.log(not_eos + (1 - tf.eye(len_src)))
+        with tf.variable_scope('mask'):
+            mask = tf.log(not_eos)
         return Transformer(
             position= Sinusoid(self.dim_emb, self.cap)
             , src_= src_, src= src
@@ -175,20 +174,17 @@ class Transformer(Record):
             smooth  = Smooth(smooth, self.dim_tgt)
         else:
             dropout = smooth = identity
-        # encoder input is source embedding + position encoding
-        # dropout only the trained embedding
         with tf.variable_scope('emb_src_'):
             shape = tf.shape(self.src)
             w = self.position(shape[1]) + dropout(self.emb_src.embed(self.src))
-        # decoder input is trained position embedding only
+        with tf.variable_scope('encode_'):
+            for enc in self.encode: w = enc(w, w, self.mask_src, dropout)
         with tf.variable_scope('emb_pos_'):
             x = dropout(tf.tile(tf.expand_dims(self.emb_pos.kern, 0), (shape[0], 1, 1)))
-        # source mask disables current step and padding steps
-        with tf.variable_scope('encode_'):
-            for enc in self.encode: w = enc(w, self.mask_src, dropout)
-        # target mask disables current step
         with tf.variable_scope('decode_'):
-            for dec in self.decode: x = dec(x, x, w, self.mask, dropout, self.mask_tgt)
+            x = self.ante(x, w, self.mask, dropout)
+            x = self.decode(x, x, self.mask_tgt, w, self.mask, dropout)
+            x = self.post(x, x, self.mask_tgt, dropout)
         y = self.logit(x, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)
