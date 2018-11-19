@@ -110,6 +110,10 @@ then the full sequence is produced in parallel from the hidden sequence.
 - fertility feature
 - self-attention current position mask
 
+[[https://arxiv.org/abs/1811.04719][libovický & helcl (2018)]]
+- projected encoder states
+- ctc loss
+
 ** iterative refinement
 
 [[https://arxiv.org/abs/1802.06901][lee et al. (2018)]]
