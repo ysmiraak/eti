@@ -1,7 +1,7 @@
 from util import Record, identity
 from util_np import np, partition
 from util_tf import QueryAttention as Attention
-from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Affine, Multilayer
+from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Multilayer
 
 
 def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
@@ -89,9 +89,11 @@ class Transformer(Record):
     def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, act= tf.nn.relu):
         """-> Transformer with fields
 
-           logit : Affine
-          decode : tuple EncodeBlock
-          encode : tuple DecodeBlock
+           logit : Linear
+            post : EncodeBlock
+          decode : DecodeBlock
+            ante : EncodeBlock
+          encode : tuple EncodeBlock
         mask_tgt : f32 (1, t, t)
          emb_pos : Linear
          emb_src : Linear
@@ -107,10 +109,8 @@ class Transformer(Record):
         with tf.variable_scope('mask_tgt'):
             mask_tgt = tf.log(1 - tf.eye(cap))
         return Transformer(
-            logit= Affine(dim_tgt, dim_emb, 'logit')
-            , ante= ante
-            , post= post
-            , decode= decode
+            logit= Linear(dim_tgt, dim_emb, 'logit')
+            , decode= decode, post= post, ante= ante
             , encode= encode
             , mask_tgt= mask_tgt
             , emb_pos= Linear(dim_emb, cap, 'emb_pos')
