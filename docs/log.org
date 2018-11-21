@@ -1,30 +1,31 @@
 * trial
 
-| id | branch    | info                                                 |
-|----+-----------+------------------------------------------------------|
-| a  | autoreg   | encoder-decoder, autoregressive                      |
-| s  | straight  | straight seq2seq                                     |
-| v  | master    | encoder-decoder, nonautoregressive                   |
-|    |           |                                                      |
-| i  | iterative | iterated decoder                                     |
-|    |           |                                                      |
-| d  | droptgt   | like v but with target input with increasing dropout |
+| id | branch      | info                                                 |
+|----+-------------+------------------------------------------------------|
+| a  | autoreg     | encoder-decoder, autoregressive                      |
+| s  | straight    | straight seq2seq                                     |
+| v  | master      | encoder-decoder, nonautoregressive                   |
+|    |             |                                                      |
+| i  | iterative   | iterated decoder                                     |
+|    |             |                                                      |
+| d  | droptgt     | like v but with target input with increasing dropout |
+|    |             |                                                      |
+| o  | original    | original transformer                                 |
+| q  | query       | query mlp                                            |
+| qm | query-multi | multi-head query mlp                                 |
 
 * todo
+
+** mlp after each att
+
+decoder:
+mlp . att . csl . mlp . att . csl ->
+mlp . csl . mlp . att . mlp . csl
+
+** convolution + attention
 
 ** try word dropout
 
 randomly swap embeded target with embedded position
 
 with an increasing swap rate
-
-** try use emb_pos as position encoding
-
-probably doesn't make sense
-but it may help coordinating tgt and src
-
-** try without dropout on emb_pos
-
-when and where should we apply dropout?
-
-** try convolution with self-attention
