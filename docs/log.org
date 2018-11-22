@@ -22,3 +22,4 @@
 | p  | postnet       | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
 | pc | postnet-conv  | postnet with convolutional encoder                                         |
 | oc | original-conv | original with convolutional encoder and decoder                            |
+| om | original-mask | original with masking decoder current step                                 |
