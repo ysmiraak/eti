@@ -1,26 +1,21 @@
 * trial
 
-| id | branch      | info                                                 |
-|----+-------------+------------------------------------------------------|
-| a  | autoreg     | encoder-decoder, autoregressive                      |
-| s  | straight    | straight seq2seq                                     |
-| v  | master      | encoder-decoder, nonautoregressive                   |
-|    |             |                                                      |
-| i  | iterative   | iterated decoder                                     |
-|    |             |                                                      |
-| d  | droptgt     | like v but with target input with increasing dropout |
-|    |             |                                                      |
-| o  | original    | original transformer                                 |
-| q  | query       | query mlp                                            |
-| qm | query-multi | multi-head query mlp                                 |
+| id | branch      | info                                                                       |
+|----+-------------+----------------------------------------------------------------------------|
+| a  | autoreg     | encoder-decoder, autoregressive                                            |
+| s  | straight    | straight seq2seq                                                           |
+| v  | master      | encoder-decoder, nonautoregressive                                         |
+|    |             |                                                                            |
+| i  | iterative   | iterated decoder                                                           |
+|    |             |                                                                            |
+| d  | droptgt     | like v but with target input with increasing dropout                       |
+|    |             |                                                                            |
+| o  | original    | original transformer                                                       |
+| q  | query       | query mlp                                                                  |
+| qm | query-multi | multi-head query mlp                                                       |
+| p  | postnet     | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
 
 * todo
-
-** mlp after each att
-
-decoder:
-mlp . att . csl . mlp . att . csl ->
-mlp . csl . mlp . att . mlp . csl
 
 ** convolution + attention
 
