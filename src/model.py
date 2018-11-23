@@ -84,10 +84,11 @@ class DecodeBlock(Record):
 class ConvBlock(Record):
 
     def __init__(self, dim, dim_mid, depth, act, name):
+        self.act = act
         self.name = name
         with tf.variable_scope(name):
             self.ante = Affine(dim_mid, dim, 'ante')
-            self.conv = tuple(Conv(dim, name= "conv{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(dim_mid, name= "conv{}".format(1+i)) for i in range(depth))
             self.post = Affine(dim, dim_mid, 'post')
             self.norm = Normalize(dim, name= 'norm')
 
@@ -95,7 +96,7 @@ class ConvBlock(Record):
         with tf.variable_scope(name or self.name):
             y = self.ante(x) # act here ????
             for conv in self.conv:
-                y = self.act(self.conv(y))
+                y = self.act(conv(y))
             return self.norm(x + dropout(self.post(y)))
 
 
