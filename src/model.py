@@ -96,7 +96,7 @@ class ConvBlock(Record):
         with tf.variable_scope(name or self.name):
             y = self.ante(x) # act here ????
             for conv in self.conv:
-                y = self.act(conv(y))
+                y = self.act(conv(tf.pad(y, ((0,0),(1,0),(0,0))), 'VALID'))
             return self.norm(x + dropout(self.post(y)))
 
 
@@ -127,7 +127,7 @@ class Transformer(Record):
         """
         assert not dim_emb % 2
         with tf.variable_scope('encode'):
-            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "layer{}".format(1+i)) for i in range(6))
+            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "conv{}".format(1+i)) for i in range(6))
             enc_satt = EncodeBlock(dim_emb, dim_mid, act, "satt")
         with tf.variable_scope('decode'):
             decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
