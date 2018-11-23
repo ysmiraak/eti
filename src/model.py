@@ -1,7 +1,7 @@
 from util import Record, identity
 from util_np import np, partition
 from util_tf import TransformerAttention as Attention
-from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Multilayer
+from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Linear, Multilayer, Conv, Affine
 
 
 def sinusoid(time, dim, freq= 1e-4, scale= True, array= False):
@@ -81,6 +81,24 @@ class DecodeBlock(Record):
             return x
 
 
+class ConvBlock(Record):
+
+    def __init__(self, dim, dim_mid, depth, act, name):
+        self.name = name
+        with tf.variable_scope(name):
+            self.ante = Affine(dim_mid, dim, 'ante')
+            self.conv = tuple(Conv(dim, name= "conv{}".format(1+i)) for i in range(depth))
+            self.post = Affine(dim, dim_mid, 'post')
+            self.norm = Normalize(dim, name= 'norm')
+
+    def __call__(self, x, dropout, name= None):
+        with tf.variable_scope(name or self.name):
+            y = self.ante(x) # act here ????
+            for conv in self.conv:
+                y = self.act(self.conv(y))
+            return self.norm(x + dropout(self.post(y)))
+
+
 class Transformer(Record):
     """-> Record
 
@@ -99,21 +117,24 @@ class Transformer(Record):
         """-> Transformer with fields
 
            logit : Linear
-          decode : tuple EncodeBlock
-          encode : tuple EncodeBlock
+          decode : tuple DecodeBlock
+        enc_satt : EncodeBlock
+        enc_conv : tuple ConvBlock
          emb_tgt : Linear
          emb_src : Linear
 
         """
         assert not dim_emb % 2
         with tf.variable_scope('encode'):
-            encode = tuple(EncodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "layer{}".format(1+i)) for i in range(6))
+            enc_satt = EncodeBlock(dim_emb, dim_mid, act, "satt")
         with tf.variable_scope('decode'):
             decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
         return Transformer(
             logit= Linear(dim_tgt, dim_emb, 'logit')
             , decode= decode
-            , encode= encode
+            , enc_satt= enc_satt
+            , enc_conv= enc_conv
             , emb_tgt= Linear(dim_emb, dim_tgt, 'emb_tgt')
             , emb_src= Linear(dim_emb, dim_src, 'emb_src')
             , dim_emb= dim_emb
@@ -178,7 +199,8 @@ class Transformer(Record):
         with tf.variable_scope('emb_src_infer'):
             w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src.embed(self.src))
         with tf.variable_scope('encode_infer'):
-            for enc in self.encode: w = enc(w, w, self.mask_src, dropout)
+            for conv in self.enc_conv: w = conv(w, dropout)
+            w = self.enc_satt(w, w, self.mask_src, dropout)
         with tf.variable_scope('decode_infer'):
             with tf.variable_scope('init'):
                 b,t = tf.shape(w)[0], placeholder(tf.int32, (), self.cap, 't')
@@ -247,7 +269,8 @@ class Transformer(Record):
         with tf.variable_scope('emb_tgt_'):
             x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt.embed(self.tgt))
         with tf.variable_scope('encode_'):
-            for enc in self.encode: w = enc(w, w, self.mask_src, dropout)
+            for conv in self.enc_conv: w = conv(w, dropout)
+            w = self.enc_satt(w, w, self.mask_src, dropout)
         with tf.variable_scope('decode_'):
             with tf.variable_scope('mask'):
                 t = tf.shape(x)[1]
