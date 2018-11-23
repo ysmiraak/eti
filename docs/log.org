@@ -21,7 +21,6 @@
 | qm | query-multi   | multi-head query mlp                                                       |
 | p  | postnet       | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
 | pc | postnet-conv  | postnet with convolutional encoder                                         |
-| om | original-mask | original with masking decoder current step                                 |
 
 * todo
 

@@ -16,6 +16,9 @@ adding this mask means that the first and the last steps have nothing to attend 
 which results in nans.
 
 consider these two alternatives.
-- pad one initial step for the attention values, similar to causal convolution.
-- pad additional bos symbols to the input sequence,
+- =padbos=: pad additional bos symbols to the input sequence,
   sacrifice (slice off) one bos at each self-attention layer when providing the attention queries.
+- =padnil=: pad one initial step for the attention values, similar to causal convolution.
+
+=padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
+all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]]).
