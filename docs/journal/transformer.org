@@ -1,0 +1,21 @@
+#+TITLE: transformer
+#+AUTHOR: kuan yu
+
+* masking current step in self-attention
+
+the current step almost always gets the highest attention weight,
+but it is not necessary to consider itself since the residual connection will add itself back anyways.
+[[https://arxiv.org/abs/1711.02281][gu et al. (2018)]] suggested masking current steps.
+on the other hand, if the other steps offer no valuable info, current step should simply trust in itself.
+
+empirically i found that the mask is useful.
+the model does not learn as fast without the mask.
+
+however when causal mask is present to enforce the autoregressive structure,
+adding this mask means that the first and the last steps have nothing to attend to,
+which results in nans.
+
+consider these two alternatives.
+- pad one initial step for the attention values, similar to causal convolution.
+- pad additional bos symbols to the input sequence,
+  sacrifice (slice off) one bos at each self-attention layer when providing the attention queries.
