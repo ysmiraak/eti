@@ -56,7 +56,8 @@ class Normalize(Record):
             self.bias = tf.get_variable('bias', dim, tf.float32, init0)
 
     def __call__(self, x, axis= -1, eps= 1e-8, name= None):
-        return self.bias + self.gain * normalize(x, axis, eps)
+        with tf.variable_scope(name or self.name):
+            return self.bias + self.gain * normalize(x, axis, eps)
 
 
 class Smooth(Record):
@@ -166,13 +167,13 @@ class Conv(Record):
             self.bias = tf.get_variable('bias', n, tf.float32, init0)
 
     def __call__(self, x, padding= 'SAME', stride= None, dilation= None, name= None):
-        return self.bias + tf.nn.convolution(
-            input= x
-            , filter= self.kern
-            , padding= padding
-            , strides= stride
-            , dilation_rate= dilation
-            , name= name or self.name)
+        with tf.variable_scope(name or self.name):
+            return self.bias + tf.nn.convolution(
+                input= x
+                , filter= self.kern
+                , padding= padding
+                , strides= stride
+                , dilation_rate= dilation)
 
 
 class Multilayer(Record):
