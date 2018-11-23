@@ -8,7 +8,7 @@ master = Record(
     ### data spec
     , unk = 0
     , eos = 1
-    , bos = -1
+    , bos = 2
     , cap = 64
     ### model spec
     , dim_src = 8192
