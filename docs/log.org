@@ -14,13 +14,15 @@
 
 ** autoregressive
 
-| id | branch        | info                                                                       |
-|----+---------------+----------------------------------------------------------------------------|
-| o  | original      | original transformer                                                       |
-| q  | query         | query mlp                                                                  |
-| qm | query-multi   | multi-head query mlp                                                       |
-| p  | postnet       | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
-| pc | postnet-conv  | postnet with convolutional encoder                                         |
+| id | branch       | info                                                                       |
+|----+--------------+----------------------------------------------------------------------------|
+| q  | query        | query mlp                                                                  |
+| qm | query-multi  | multi-head query mlp                                                       |
+| p  | postnet      | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
+| pc | postnet-conv | postnet with convolutional encoder                                         |
+|    |              |                                                                            |
+| a  | autoreg      | original transformer with current step mask                                |
+| he | autoreg-init | he init for relu without large middle layers                               |
 
 * todo
 
@@ -31,5 +33,7 @@ but maybe doubled size is enough.
 or change to he initialization?
 
 ** affine for key, value, query transformations
+
+** input output embedding sharing
 
 ** dropout position encoding as well?
