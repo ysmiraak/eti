@@ -14,13 +14,14 @@
 
 ** autoregressive
 
-| id | branch       | info                                                                       |
-|----+--------------+----------------------------------------------------------------------------|
-| p  | postnet      | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
-| pc | postnet-conv | postnet with convolutional encoder                                         |
-|    |              |                                                                            |
-| a  | autoreg      | original transformer with current step mask                                |
-| he | autoreg-init | he init for relu without large middle layers                               |
+| id | branch         | info                                                                       |
+|----+----------------+----------------------------------------------------------------------------|
+| p  | postnet        | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
+|    |                |                                                                            |
+| a  | autoreg        | original transformer with current step mask                                |
+| he | autoreg-init   | he init for relu without large middle layers                               |
+| d  | autoreg-double | he init for relu without double sized middle layers                        |
+| c  | autoreg-conv   | encoder with convolution                                                   |
 
 * todo
 
