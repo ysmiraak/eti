@@ -16,8 +16,6 @@
 
 | id | branch       | info                                                                       |
 |----+--------------+----------------------------------------------------------------------------|
-| q  | query        | query mlp                                                                  |
-| qm | query-multi  | multi-head query mlp                                                       |
 | p  | postnet      | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
 | pc | postnet-conv | postnet with convolutional encoder                                         |
 |    |              |                                                                            |
@@ -32,7 +30,12 @@ bigger middle layers prevent dying relu,
 but maybe doubled size is enough.
 or change to he initialization?
 
-** affine for key, value, query transformations
+** convolutional
+
+** attention mechanism
+
+- affine for key, value, query transformations
+- query mlp
 
 ** input output embedding sharing
 
