@@ -21,4 +21,4 @@ consider these two alternatives.
 - =padnil=: pad one initial step for the attention values, similar to causal convolution.
 
 =padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
-all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]]).
+all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]] per 250 updates).
