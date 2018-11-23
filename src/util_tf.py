@@ -3,6 +3,11 @@ from util import Record
 import tensorflow as tf
 
 
+init0 = tf.initializers.zeros()
+init1 = tf.initializers.ones()
+init_relu = tf.keras.initializers.he_uniform()
+
+
 def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     for _ in range(prerun): sess.run(run, feed_dict)
     meta = tf.RunMetadata()
@@ -44,14 +49,11 @@ def normalize(x, axis= -1, eps= 1e-8, name= 'normalize'):
 class Normalize(Record):
     """layer or batch normalization, depending on the `axis`"""
 
-    def __init__(self, dim
-                 , gain_initializer= tf.ones_initializer()
-                 , bias_initializer= tf.zeros_initializer()
-                 , name= 'normalize'):
+    def __init__(self, dim, name= 'normalize'):
         self.name = name
         with tf.variable_scope(name):
-            self.gain = tf.get_variable('gain', dim, initializer= gain_initializer)
-            self.bias = tf.get_variable('bias', dim, initializer= bias_initializer)
+            self.gain = tf.get_variable('gain', dim, tf.float32, init1)
+            self.bias = tf.get_variable('bias', dim, tf.float32, init0)
 
     def __call__(self, x, axis= -1, eps= 1e-8, name= None):
         return self.bias + self.gain * normalize(x, axis, eps)
@@ -117,11 +119,11 @@ class Maxout(Record):
 class Linear(Record):
     """linear transformation from `m` to `n`"""
 
-    def __init__(self, n, m= None, name= 'linear'):
+    def __init__(self, n, m= None, name= 'linear', init= None):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', (m, n))
+            self.kern = tf.get_variable('kern', (m, n), tf.float32, init)
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
@@ -141,12 +143,12 @@ class Linear(Record):
 class Affine(Record):
     """affine transformation from `m` to `n`"""
 
-    def __init__(self, n, m= None, name= 'affine'):
+    def __init__(self, n, m= None, name= 'affine', init= None):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', (m, n))
-            self.bias = tf.get_variable('bias', n)
+            self.kern = tf.get_variable('kern', (m, n), tf.float32, init)
+            self.bias = tf.get_variable('bias', n, tf.float32, init0)
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
@@ -156,12 +158,12 @@ class Affine(Record):
 class Conv(Record):
     """channal-last convolution from `m` to `n` channels"""
 
-    def __init__(self, n, m= None, shape= (2,), name= 'conv'):
+    def __init__(self, n, m= None, shape= (2,), name= 'conv', init= init_relu):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', shape + (m, n))
-            self.bias = tf.get_variable('bias', n)
+            self.kern = tf.get_variable('kern', shape + (m, n), tf.float32, init)
+            self.bias = tf.get_variable('bias', n, tf.float32, init0)
 
     def __call__(self, x, padding= 'SAME', stride= None, dilation= None, name= None):
         return self.bias + tf.nn.convolution(
@@ -176,7 +178,7 @@ class Conv(Record):
 class Multilayer(Record):
     """mlp from `m` to `n`, with `mid` dimension(s)"""
 
-    def __init__(self, n, m= None, mid= None, act= Maxout(2), name= 'multilayer'):
+    def __init__(self, n, m= None, mid= None, act= Maxout(2), name= 'multilayer', init= None):
         if m is None: m = n
         if mid is None: mid = m
         if isinstance(mid, int): mid = mid,
@@ -186,11 +188,11 @@ class Multilayer(Record):
         with tf.variable_scope(name):
             self.out = Affine(n, mid[-1], 'out')
             if 1 == len(mid):
-                self.mid = Affine(mid[0], m, 'mid'),
+                self.mid = Affine(mid[0], m, 'mid', init),
             else:
                 self.mid, j = [], m
                 for i in mid:
-                    self.mid.append(Affine(i, j, 'm{}d'.format(i)))
+                    self.mid.append(Affine(i, j, 'm{}d'.format(i), init))
                     j = i
                 self.mid = tuple(self.mid)
 
