@@ -236,25 +236,23 @@ class TransformerAttention(Record):
 
     """
 
-    def __init__(self, n, m= None, name= 'attention', num_head= None):
+    def __init__(self, n, m= None, name= 'attention', **largs):
         if m is None: m = n
-        if num_head is None: num_head = n // 64
-        assert not n % num_head
         self.n = n
-        self.num_head = num_head
         self.name = name
         with tf.variable_scope(name):
             self.q = Linear(n, m, 'q')
             self.k = Linear(n, n, 'k')
             self.v = Linear(n, n, 'v')
 
-    def __call__(self, query, value, mask= None, name= None):
+    def __call__(self, query, value, mask= None, name= None, head= 8):
         # query:btm -> value:bsn -> btn
-        stack_split = lambda x: tf.stack(tf.split(x, self.num_head, -1)) # btn -> hbtc
+        assert not self.n % head
+        stack_split = lambda x: tf.stack(tf.split(x, head, -1)) # btn -> hbtc
         with tf.variable_scope(name or self.name):
             # hbts <- (hbtc <- btn <- btm) @ (hbcs <- hbsc <- btn <- btn)
             a = tf.matmul(stack_split(self.q(query)), stack_split(self.k(value)), transpose_b= True)
-            a *= (self.n // self.num_head) ** -0.5
+            a *= (self.n // head) ** -0.5
             if mask is not None: a += mask
             a = tf.nn.softmax(a)
             # btn <- hbtc <- hbts @ (hbsc <- bsn <- bsn)

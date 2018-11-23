@@ -14,7 +14,7 @@ master = Record(
     , dim_src = 8192
     , dim_tgt = 8192
     , dim_emb = 512
-    , dim_mid = 1024
+    , dim_mid = 2048
     , depth   = 2
     ### regularization
     , dropout = 0.1
@@ -27,7 +27,7 @@ master = Record(
     ### training schedule
     , batch_train = 64
     , batch_valid = 512
-    , total_valid = 2560
+    , total_valid = 4096
 )
 
 
