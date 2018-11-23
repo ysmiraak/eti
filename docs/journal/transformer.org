@@ -1,6 +1,21 @@
 #+TITLE: transformer
 #+AUTHOR: kuan yu
 
+* attention
+
+\begin{align*}
+k , v , q &: \mathbb{N}_{+} &&\textrm{dimensions for key, value, query}\\
+f_{k} &: \mathbb{R}^{v} \to \mathbb{R}^{k} &&\textrm{transformation for key}\\
+f_{v} &: \mathbb{R}^{v} \to \mathbb{R}^{k} &&\textrm{transformation for value}\\
+f_{q} &: \mathbb{R}^{q} \to \mathbb{R}^{k} &&\textrm{transformation for query}\\
+\\
+f_{a} &: \prod_{t : \mathbb{N}_{+}} \mathbb{R}^{t,k} \to \mathbb{R}^{k} \to \mathbb{R}^{t} &&\textrm{scaled dot-product attention}\\
+f_{a} \; w \; x &= (w \; x) / \sqrt{k} &&\\
+\\
+f &: \prod_{t : \mathbb{N}_{+}} \mathbb{R}^{t,v} \to \mathbb{R}^{q} \to \mathbb{R}^{k} &&\textrm{the attention function}\\
+f \; w \; x &= (f_{v} \; w)^{T} \; (f_{a} \; (f_{k} \; w) \; (f_{q} \; x)) &&\\
+\end{align*}
+
 * masking current step in self-attention
 
 the current step almost always gets the highest attention weight,
@@ -23,6 +38,12 @@ consider these two alternatives.
 =padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
 all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]] per 250 updates).
 
+* convolution
+
+[[https://arxiv.org/abs/1810.13320][yang et al.]] proposed convolutional self-attention.
+the 1d version is basically the restricted attention mentioned by [[https://arxiv.org/abs/1706.03762][vaswani et al.]] in the original transformer paper.
+the 2d version also queries across attention heads, which allows the averaging not to be simply component-wise.
+
 * complexity
 
 | b | 128 | bottleneck dimension |
@@ -35,26 +56,26 @@ which all at most have \(O(d)\) parameters and \(O(dt)\) complexity.
 
 ** original transformer self-attention layer
 
-| parts       | parameters | complexity     |
-|-------------+------------+----------------|
-| key         | d d        | d d t          |
-| value       | d d        | d d t          |
-| query       | d d        | d d t          |
-| query @ key |            | d t t          |
-| a @ value   |            | d t t          |
-| mlp in      | d d 4      | d d t 4        |
-| mlp ex      | d d 4      | d d t 4        |
-|-------------+------------+----------------|
-| total       | 11 dd      | 11 ddt + 2 dtt |
-| in million  | 2.9        | 188.7          |
+| parts      | parameters | complexity     |
+|------------+------------+----------------|
+| key        | d d        | d d t          |
+| value      | d d        | d d t          |
+| query      | d d        | d d t          |
+| weight     |            | d t t          |
+| average    |            | d t t          |
+| mlp in     | d d 4      | d d t 4        |
+| mlp ex     | d d 4      | d d t 4        |
+|------------+------------+----------------|
+| total      | 11 dd      | 11 ddt + 2 dtt |
+| in million | 2.9        | 188.7          |
 
 ** bottlenecked convolutional layer
 
 | parts      | parameters  | complexity    |
 |------------+-------------+---------------|
 | in         | b d         | b d t         |
-| conv       | b b 2       | b b t 2       |
-| conv       | b b 2       | b b t 2       |
+| conv1      | b b 2       | b b t 2       |
+| conv2      | b b 2       | b b t 2       |
 | ex         | b d         | b d t         |
 |------------+-------------+---------------|
 | total      | 2 bd + 4 bb | 2 bdt + 4 bbt |

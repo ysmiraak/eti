@@ -5,7 +5,7 @@
 
 let \(S\) and \(T\) be vocabularies, or rather spaces of distribution over vocabularies.
 
-the notion of a sequence of length \(l : \mathcal{N}\) can be defined in the language of [[https://ncatlab.org/nlab/show/dependent+type][dependent type theory]] as follows.
+the notion of a sequence of length \(l : \mathbb{N}\) can be defined in the language of [[https://ncatlab.org/nlab/show/dependent+type][dependent type theory]] as follows.
 
 \begin{align*}
 [l] &= \{ 0 , \ldots , l \}\\
@@ -19,7 +19,7 @@ intuitively, if we start from the unit object and construct the sequence with th
 it is the same as having a function which constructs the sequence and gives random access to its components.
 the dependent product factorization is what gives us autoregressive models.
 
-fixing a length \(l : \mathcal{N}\), we can give these equivalent discriptions for a seq2seq model.
+fixing a length \(l : \mathbb{N}\), we can give these equivalent discriptions for a seq2seq model.
 
 \begin{align*}
        &S^{l} \to T^{l} &&\textrm{straight mapping}\\
@@ -30,22 +30,22 @@ fixing a length \(l : \mathcal{N}\), we can give these equivalent discriptions f
 in general, for sequences of variable lengths, we have these seq2seq models.
 
 \begin{align*}
-       &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} &&\textrm{straight mapping}\\
-=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} [l] \to T &&\textrm{nonautoregressive}\\
-=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
+       &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} T^{l} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} [l] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
 \end{align*}
 
-the [[https://ncatlab.org/nlab/show/dependent+sum][dependent sum]] \(\sum_{l : \mathcal{N}} T^{l}\) asserts the existence of target sequences of some length.
+the [[https://ncatlab.org/nlab/show/dependent+sum][dependent sum]] \(\sum_{l : \mathbb{N}} T^{l}\) asserts the existence of target sequences of some length.
 the prediction of target lengths can be incorporated into the models as follows.
 
 \begin{align*}
-       &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} &&\textrm{straight mapping}\\
-=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} [f s] \to T &&\textrm{nonautoregressive}\\
-=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} \prod_{n : [f s]} T^{n} \to T &&\textrm{autoregressive}\\
+       &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} T^{f s} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} [f s] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} \prod_{n : [f s]} T^{n} \to T &&\textrm{autoregressive}\\
 \end{align*}
 
 we can check that the length predicted models are a subset of the general models with the proof
-\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right) : \left( \prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} \right) \to \left( \prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} \right)\).
+\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right) : \left( \prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} T^{f s} \right) \to \left( \prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} T^{l} \right)\).
 
 * why
 

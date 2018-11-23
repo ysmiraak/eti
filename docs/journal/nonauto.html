@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2018-11-23 Fri 08:43 -->
+<!-- 2018-11-23 Fri 19:19 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>nonautoregressive seq2seq</title>
@@ -256,40 +256,40 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#orgdaf8f70">1. formally</a></li>
-<li><a href="#org851a307">2. why</a></li>
-<li><a href="#org3c08beb">3. how</a>
+<li><a href="#org286e645">1. formally</a></li>
+<li><a href="#orgd5d67f0">2. why</a></li>
+<li><a href="#org39ddab1">3. how</a>
 <ul>
-<li><a href="#org6841d82">3.1. batched decoding</a></li>
-<li><a href="#orga78a544">3.2. alternative decoding</a></li>
-<li><a href="#orge80b028">3.3. alternative input</a></li>
-<li><a href="#org8b7e27d">3.4. iterative refinement</a></li>
-<li><a href="#orgc4162b5">3.5. latent models</a></li>
-<li><a href="#org32f0ee5">3.6. summary</a></li>
+<li><a href="#org1b1df74">3.1. batched decoding</a></li>
+<li><a href="#org98d0709">3.2. alternative decoding</a></li>
+<li><a href="#orgd322fa7">3.3. alternative input</a></li>
+<li><a href="#org3c6872c">3.4. iterative refinement</a></li>
+<li><a href="#org164d1e8">3.5. latent models</a></li>
+<li><a href="#org0be989f">3.6. summary</a></li>
 </ul>
 </li>
-<li><a href="#org239a495">4. training strategies</a>
+<li><a href="#orgb1e5988">4. training strategies</a>
 <ul>
-<li><a href="#orge6398a5">4.1. weighted loss over sequence</a></li>
-<li><a href="#org1e22b78">4.2. target dropout</a></li>
-<li><a href="#org2b50d18">4.3. word dropout</a></li>
-<li><a href="#orgcef422f">4.4. iterative refinement</a></li>
+<li><a href="#orgbaf6861">4.1. weighted loss over sequence</a></li>
+<li><a href="#org54c3260">4.2. target dropout</a></li>
+<li><a href="#orge0f9787">4.3. word dropout</a></li>
+<li><a href="#org5fb7b5a">4.4. iterative refinement</a></li>
 </ul>
 </li>
-<li><a href="#org21f238a">5. modeling strategies</a></li>
+<li><a href="#orgb9d95e6">5. modeling strategies</a></li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-orgdaf8f70" class="outline-2">
-<h2 id="orgdaf8f70"><span class="section-number-2">1</span> formally</h2>
+<div id="outline-container-org286e645" class="outline-2">
+<h2 id="org286e645"><span class="section-number-2">1</span> formally</h2>
 <div class="outline-text-2" id="text-1">
 <p>
 let \(S\) and \(T\) be vocabularies, or rather spaces of distribution over vocabularies.
 </p>
 
 <p>
-the notion of a sequence of length \(l : \mathcal{N}\) can be defined in the language of <a href="https://ncatlab.org/nlab/show/dependent+type">dependent type theory</a> as follows.
+the notion of a sequence of length \(l : \mathbb{N}\) can be defined in the language of <a href="https://ncatlab.org/nlab/show/dependent+type">dependent type theory</a> as follows.
 </p>
 
 \begin{align*}
@@ -307,7 +307,7 @@ the dependent product factorization is what gives us autoregressive models.
 </p>
 
 <p>
-fixing a length \(l : \mathcal{N}\), we can give these equivalent discriptions for a seq2seq model.
+fixing a length \(l : \mathbb{N}\), we can give these equivalent discriptions for a seq2seq model.
 </p>
 
 \begin{align*}
@@ -321,31 +321,31 @@ in general, for sequences of variable lengths, we have these seq2seq models.
 </p>
 
 \begin{align*}
-       &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} &&\textrm{straight mapping}\\
-=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} [l] \to T &&\textrm{nonautoregressive}\\
-=\quad &\prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
+       &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} T^{l} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} [l] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} \prod_{n : [l]} T^{n} \to T &&\textrm{autoregressive}\\
 \end{align*}
 
 <p>
-the <a href="https://ncatlab.org/nlab/show/dependent+sum">dependent sum</a> \(\sum_{l : \mathcal{N}} T^{l}\) asserts the existence of target sequences of some length.
+the <a href="https://ncatlab.org/nlab/show/dependent+sum">dependent sum</a> \(\sum_{l : \mathbb{N}} T^{l}\) asserts the existence of target sequences of some length.
 the prediction of target lengths can be incorporated into the models as follows.
 </p>
 
 \begin{align*}
-       &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} &&\textrm{straight mapping}\\
-=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} [f s] \to T &&\textrm{nonautoregressive}\\
-=\quad &\prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} \prod_{n : [f s]} T^{n} \to T &&\textrm{autoregressive}\\
+       &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} T^{f s} &&\textrm{straight mapping}\\
+=\quad &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} [f s] \to T &&\textrm{nonautoregressive}\\
+=\quad &\prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} \prod_{n : [f s]} T^{n} \to T &&\textrm{autoregressive}\\
 \end{align*}
 
 <p>
 we can check that the length predicted models are a subset of the general models with the proof
-\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right) : \left( \prod_{m : \mathcal{N}} \sum_{f : S^{m} \to \mathcal{N}} \prod_{s : S^{m}} T^{f s} \right) \to \left( \prod_{m : \mathcal{N}} S^{m} \to \sum_{l : \mathcal{N}} T^{l} \right)\).
+\(\lambda_{g} \lambda_{m} \lambda_{s} \left( g \, m \, 0 \, s, g \, m \, 1 \, s \right) : \left( \prod_{m : \mathbb{N}} \sum_{f : S^{m} \to \mathbb{N}} \prod_{s : S^{m}} T^{f s} \right) \to \left( \prod_{m : \mathbb{N}} S^{m} \to \sum_{l : \mathbb{N}} T^{l} \right)\).
 </p>
 </div>
 </div>
 
-<div id="outline-container-org851a307" class="outline-2">
-<h2 id="org851a307"><span class="section-number-2">2</span> why</h2>
+<div id="outline-container-orgd5d67f0" class="outline-2">
+<h2 id="orgd5d67f0"><span class="section-number-2">2</span> why</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 autoregressive models are the standard for sequence modeling.
@@ -388,16 +388,16 @@ an effective non ad hoc nonautoregressive architecture is still to be discovered
 </div>
 </div>
 
-<div id="outline-container-org3c08beb" class="outline-2">
-<h2 id="org3c08beb"><span class="section-number-2">3</span> how</h2>
+<div id="outline-container-org39ddab1" class="outline-2">
+<h2 id="org39ddab1"><span class="section-number-2">3</span> how</h2>
 <div class="outline-text-2" id="text-3">
 <p>
 most of the research comes from machine translation, unless mentioned otherwise.
 </p>
 </div>
 
-<div id="outline-container-org6841d82" class="outline-3">
-<h3 id="org6841d82"><span class="section-number-3">3.1</span> batched decoding</h3>
+<div id="outline-container-org1b1df74" class="outline-3">
+<h3 id="org1b1df74"><span class="section-number-3">3.1</span> batched decoding</h3>
 <div class="outline-text-3" id="text-3-1">
 <p>
 one remedy is to shorten the autoregressive steps by batching multiple predictions at once.
@@ -413,8 +413,8 @@ then the full sequence is produced in parallel from the hidden sequence.
 </div>
 </div>
 
-<div id="outline-container-orga78a544" class="outline-3">
-<h3 id="orga78a544"><span class="section-number-3">3.2</span> alternative decoding</h3>
+<div id="outline-container-org98d0709" class="outline-3">
+<h3 id="org98d0709"><span class="section-number-3">3.2</span> alternative decoding</h3>
 <div class="outline-text-3" id="text-3-2">
 <p>
 <a href="https://arxiv.org/abs/1702.02429">gu et al. (2017)</a>
@@ -427,8 +427,8 @@ then the full sequence is produced in parallel from the hidden sequence.
 </div>
 </div>
 
-<div id="outline-container-orge80b028" class="outline-3">
-<h3 id="orge80b028"><span class="section-number-3">3.3</span> alternative input</h3>
+<div id="outline-container-orgd322fa7" class="outline-3">
+<h3 id="orgd322fa7"><span class="section-number-3">3.3</span> alternative input</h3>
 <div class="outline-text-3" id="text-3-3">
 <p>
 <a href="https://arxiv.org/abs/1711.02281">gu et al. (2018)</a>
@@ -449,8 +449,8 @@ then the full sequence is produced in parallel from the hidden sequence.
 </div>
 </div>
 
-<div id="outline-container-org8b7e27d" class="outline-3">
-<h3 id="org8b7e27d"><span class="section-number-3">3.4</span> iterative refinement</h3>
+<div id="outline-container-org3c6872c" class="outline-3">
+<h3 id="org3c6872c"><span class="section-number-3">3.4</span> iterative refinement</h3>
 <div class="outline-text-3" id="text-3-4">
 <p>
 <a href="https://arxiv.org/abs/1802.06901">lee et al. (2018)</a>
@@ -462,8 +462,8 @@ then the full sequence is produced in parallel from the hidden sequence.
 </div>
 </div>
 
-<div id="outline-container-orgc4162b5" class="outline-3">
-<h3 id="orgc4162b5"><span class="section-number-3">3.5</span> latent models</h3>
+<div id="outline-container-org164d1e8" class="outline-3">
+<h3 id="org164d1e8"><span class="section-number-3">3.5</span> latent models</h3>
 <div class="outline-text-3" id="text-3-5">
 <p>
 <a href="https://arxiv.org/abs/1711.10433">van den oord et al. (2017)</a>
@@ -501,8 +501,8 @@ then the full sequence is produced in parallel from the hidden sequence.
 </div>
 </div>
 
-<div id="outline-container-org32f0ee5" class="outline-3">
-<h3 id="org32f0ee5"><span class="section-number-3">3.6</span> summary</h3>
+<div id="outline-container-org0be989f" class="outline-3">
+<h3 id="org0be989f"><span class="section-number-3">3.6</span> summary</h3>
 <div class="outline-text-3" id="text-3-6">
 <p>
 even though autoregressive, nonautoregressive, and straight mapping are equivalent descriptions,
@@ -538,8 +538,8 @@ i file them under training strategies and modeling strategies.
 </div>
 </div>
 
-<div id="outline-container-org239a495" class="outline-2">
-<h2 id="org239a495"><span class="section-number-2">4</span> training strategies</h2>
+<div id="outline-container-orgb1e5988" class="outline-2">
+<h2 id="orgb1e5988"><span class="section-number-2">4</span> training strategies</h2>
 <div class="outline-text-2" id="text-4">
 <p>
 consider a decoder which accepts only the encoder outputs as the input,
@@ -553,8 +553,8 @@ namely a position embedding.
 </p>
 </div>
 
-<div id="outline-container-orge6398a5" class="outline-3">
-<h3 id="orge6398a5"><span class="section-number-3">4.1</span> weighted loss over sequence</h3>
+<div id="outline-container-orgbaf6861" class="outline-3">
+<h3 id="orgbaf6861"><span class="section-number-3">4.1</span> weighted loss over sequence</h3>
 <div class="outline-text-3" id="text-4-1">
 <p>
 the model is capable of contructing the first few steps just fine.
@@ -578,8 +578,8 @@ and it hinders less when i softened the weights by sqrt.
 </div>
 </div>
 
-<div id="outline-container-org1e22b78" class="outline-3">
-<h3 id="org1e22b78"><span class="section-number-3">4.2</span> target dropout</h3>
+<div id="outline-container-org54c3260" class="outline-3">
+<h3 id="org54c3260"><span class="section-number-3">4.2</span> target dropout</h3>
 <div class="outline-text-3" id="text-4-2">
 <p>
 consider a denoising decoder which takes a target sequence and predict the same sequence,
@@ -608,8 +608,8 @@ so far the model seems happy.
 </div>
 </div>
 
-<div id="outline-container-org2b50d18" class="outline-3">
-<h3 id="org2b50d18"><span class="section-number-3">4.3</span> word dropout</h3>
+<div id="outline-container-orge0f9787" class="outline-3">
+<h3 id="orge0f9787"><span class="section-number-3">4.3</span> word dropout</h3>
 <div class="outline-text-3" id="text-4-3">
 <p>
 similar to target dropout, but drop entire words.
@@ -630,8 +630,8 @@ two methods:
 </div>
 </div>
 
-<div id="outline-container-orgcef422f" class="outline-3">
-<h3 id="orgcef422f"><span class="section-number-3">4.4</span> iterative refinement</h3>
+<div id="outline-container-org5fb7b5a" class="outline-3">
+<h3 id="org5fb7b5a"><span class="section-number-3">4.4</span> iterative refinement</h3>
 <div class="outline-text-3" id="text-4-4">
 <p>
 train a logit vector over the target vocabulary for every position.
@@ -659,8 +659,8 @@ todo this should be a case of variational inference, find out more
 </div>
 </div>
 
-<div id="outline-container-org21f238a" class="outline-2">
-<h2 id="org21f238a"><span class="section-number-2">5</span> modeling strategies</h2>
+<div id="outline-container-orgb9d95e6" class="outline-2">
+<h2 id="orgb9d95e6"><span class="section-number-2">5</span> modeling strategies</h2>
 <div class="outline-text-2" id="text-5">
 <p>
 todo cf latent models
@@ -670,7 +670,7 @@ todo cf latent models
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: kuan yu</p>
-<p class="date">Created: 2018-11-23 Fri 08:43</p>
+<p class="date">Created: 2018-11-23 Fri 19:19</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
