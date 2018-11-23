@@ -22,3 +22,40 @@ consider these two alternatives.
 
 =padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
 all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]] per 250 updates).
+
+* complexity
+
+| b | 128 | bottleneck dimension |
+| d | 512 | model dimension      |
+| t |  64 | time steps           |
+
+ignoring minor costs:
+split, stack, scaling, masking, softmax, relu, residual connection, normalization, gain, and various biases;
+which all at most have \(O(d)\) parameters and \(O(dt)\) complexity.
+
+** original transformer self-attention layer
+
+| parts       | parameters | complexity     |
+|-------------+------------+----------------|
+| key         | d d        | d d t          |
+| value       | d d        | d d t          |
+| query       | d d        | d d t          |
+| query @ key |            | d t t          |
+| a @ value   |            | d t t          |
+| mlp in      | d d 4      | d d t 4        |
+| mlp ex      | d d 4      | d d t 4        |
+|-------------+------------+----------------|
+| total       | 11 dd      | 11 ddt + 2 dtt |
+| in million  | 2.9        | 188.7          |
+
+** bottlenecked convolutional layer
+
+| parts      | parameters  | complexity    |
+|------------+-------------+---------------|
+| in         | b d         | b d t         |
+| conv       | b b 2       | b b t 2       |
+| conv       | b b 2       | b b t 2       |
+| ex         | b d         | b d t         |
+|------------+-------------+---------------|
+| total      | 2 bd + 4 bb | 2 bdt + 4 bbt |
+| in million | 0.2         | 12.6          |
