@@ -21,5 +21,16 @@
 | qm | query-multi   | multi-head query mlp                                                       |
 | p  | postnet       | (mlp . csl . mlp . att . mlp . csl) <- (mlp . att . csl . mlp . att . csl) |
 | pc | postnet-conv  | postnet with convolutional encoder                                         |
-| oc | original-conv | original with convolutional encoder and decoder                            |
 | om | original-mask | original with masking decoder current step                                 |
+
+* todo
+
+** are quadrupled middle layers in mlps necessary
+
+bigger middle layers prevent dying relu,
+but maybe doubled size is enough.
+or change to he initialization?
+
+** affine for key, value, query transformations
+
+** dropout position encoding as well?
