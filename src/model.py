@@ -210,7 +210,7 @@ class Transformer(Record):
                 pos = self.position(t)
                 i = tf.constant(0)
                 x = tf.fill((b, 1), self.bos, 'x')
-                c, c_shape = tf.zeros((b, 2, self.dim_emb), name= 'c'), tf.TensorShape((None,    2, self.dim_emb))
+                c, c_shape = tf.zeros((b, 2,          128), name= 'c'), tf.TensorShape((None,    2,          128))
                 v, v_shape = tf.zeros((b, 1, self.dim_emb), name= 'v'), tf.TensorShape((None, None, self.dim_emb))
                 y, y_shape = tf.zeros((b, 0, self.dim_tgt), name= 'y'), tf.TensorShape((None, None, self.dim_tgt))
                 p, p_shape = tf.zeros((b, 0),     tf.int32, name= 'p'), tf.TensorShape((None, None))
@@ -225,10 +225,10 @@ class Transformer(Record):
                 i, ds = 0, []
                 for dec in self.dec_conv:
                     with tf.variable_scope(dec.name):
-                        x = dec.ante(x)
+                        d = dec.ante(x)
                         for conv in dec.conv:
                             with tf.variable_scope('cache_c'):
-                                d = tf.concat((cs[i][:,1:], x), 1)
+                                d = tf.concat((cs[i][:,1:], d), 1)
                                 ds.append(d)
                                 i += 1
                             d = dec.act(conv(d, 'VALID'))
