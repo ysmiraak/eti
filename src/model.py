@@ -127,13 +127,15 @@ class Transformer(Record):
         """
         assert not dim_emb % 2
         with tf.variable_scope('encode'):
-            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "conv{}".format(1+i)) for i in range(6))
+            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "conv{}".format(1+i)) for i in range(depth))
             enc_satt = EncodeBlock(dim_emb, dim_mid, act, "satt")
         with tf.variable_scope('decode'):
-            decode = tuple(DecodeBlock(dim_emb, dim_mid, act, "layer{}".format(1+i)) for i in range(depth))
+            dec_conv = tuple(ConvBlock(dim_emb, 128, 2, act, "conv{}".format(1+i)) for i in range(depth))
+            dec_satt = DecodeBlock(dim_emb, dim_mid, act, "satt")
         return Transformer(
             logit= Linear(dim_tgt, dim_emb, 'logit')
-            , decode= decode
+            , dec_satt= dec_satt
+            , dec_conv= dec_conv
             , enc_satt= enc_satt
             , enc_conv= enc_conv
             , emb_tgt= Linear(dim_emb, dim_tgt, 'emb_tgt')
@@ -208,20 +210,31 @@ class Transformer(Record):
                 pos = self.position(t)
                 i = tf.constant(0)
                 x = tf.fill((b, 1), self.bos, 'x')
+                c, c_shape = tf.zeros((b, 2, self.dim_emb), name= 'c'), tf.TensorShape((None,    2, self.dim_emb))
                 v, v_shape = tf.zeros((b, 1, self.dim_emb), name= 'v'), tf.TensorShape((None, None, self.dim_emb))
                 y, y_shape = tf.zeros((b, 0, self.dim_tgt), name= 'y'), tf.TensorShape((None, None, self.dim_tgt))
                 p, p_shape = tf.zeros((b, 0),     tf.int32, name= 'p'), tf.TensorShape((None, None))
-            def body(i, x, vs, y, p):
+            def body(i, x, cs, v, y, p):
                 # i : ()                time step from 0 to t
                 # x : (b, 1)            x_i
+                # c : (b, 2,   dim_emb) convolution values
                 # v : (b, 1+i, dim_emb) attention values
                 # y : (b, i,   dim_tgt) logit over x one step ahead
                 # p : (b, i)            predictions
                 with tf.variable_scope('emb_tgt'): x = pos[i] + dropout(self.emb_tgt.embed(x))
-                us = []
-                for v, dec in zip(vs, self.decode):
-                    with tf.variable_scope('cache_v'): us.append(tf.concat((v, x), 1))
-                    x = dec(x, v, None, w, self.mask, dropout)
+                i, ds = 0, []
+                for dec in self.dec_conv:
+                    with tf.variable_scope(dec.name):
+                        x = dec.ante(x)
+                        for conv in dec.conv:
+                            with tf.variable_scope('cache_c'):
+                                d = tf.concat((cs[i][:,1:], x), 1)
+                                ds.append(d)
+                                i += 1
+                            d = dec.act(conv(d, 'VALID'))
+                        x = dec.norm(x + dropout(dec.post(d)))
+                with tf.variable_scope('cache_v'): u = tf.concat((v, x), 1)
+                x = self.dec_satt(x, v, None, w, self.mask, dropout)
                 x = self.logit(x)
                 with tf.variable_scope('cache_y'): y = tf.concat((y, x), 1)
                 if random:
@@ -231,14 +244,15 @@ class Transformer(Record):
                     with tf.variable_scope('argmax'):
                         x = tf.argmax(x, -1, output_type= tf.int32)
                 with tf.variable_scope('cache_p'): p = tf.concat((p, x), 1)
-                return i + 1, x, tuple(us), y, p
+                return i + 1, x, tuple(ds), u, y, p
             def cond(i, x, *_):
                 with tf.variable_scope('cond'):
                     return ((i < t) & ~ tf.reduce_all(tf.equal(x, self.eos))) if minimal else (i < t)
-            _, _, _, y, p = tf.while_loop(
+            _, _, _, _, y, p = tf.while_loop(
                 cond, body
-                , (i      , x      , (v      ,)*len(self.decode), y      , p)
-                , (i.shape, x.shape, (v_shape,)*len(self.decode), y_shape, p_shape)
+                # fixme change hard coded 8
+                , (i      , x      , (c      ,)*8, v,       y      , p)
+                , (i.shape, x.shape, (c_shape,)*8, v_shape, y_shape, p_shape)
                 , back_prop= False
                 , swap_memory= True
                 , name= 'autoreg')
@@ -273,13 +287,13 @@ class Transformer(Record):
             for conv in self.enc_conv: w = conv(w, dropout)
             w = self.enc_satt(w, w, self.mask_src, dropout)
         with tf.variable_scope('decode_'):
+            for conv in self.dec_conv: x = conv(x, dropout)
             with tf.variable_scope('mask'):
                 t = tf.shape(x)[1]
                 m = tf.log(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense())
-            for i, dec in enumerate(self.decode):
-                with tf.variable_scope("pad{}".format(1+i)):
-                    v = tf.pad(x[:,:-1], ((0,0),(1,0),(0,0)))
-                x = dec(x, v, m, w, self.mask, dropout)
+            with tf.variable_scope("pad"):
+                v = tf.pad(x[:,:-1], ((0,0),(1,0),(0,0)))
+            x = self.dec_satt(x, v, m, w, self.mask, dropout)
         y = self.logit(x, 'logit_')
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, -1, output_type= tf.int32)

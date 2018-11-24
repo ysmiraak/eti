@@ -15,7 +15,7 @@ master = Record(
     , dim_tgt = 8192
     , dim_emb = 512
     , dim_mid = 2048
-    , depth   = 2
+    , depth   = 4
     ### regularization
     , dropout = 0.1
     , smooth  = 0.1
@@ -35,4 +35,4 @@ wide = Record(master, dim_mid= 2048)
 deep = Record(master, depth= 4)
 
 
-config = Record(master, trial= 'c', ckpt= None)
+config = Record(master, trial= 'cd', ckpt= None)
