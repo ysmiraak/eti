@@ -29,13 +29,9 @@
 
 * todo
 
-** are quadrupled middle layers in mlps necessary
-
-bigger middle layers prevent dying relu,
-but maybe doubled size is enough.
-or change to he initialization?
-
 ** convolutional
+
+** residual vs highway vs bilinear
 
 ** attention mechanism
 
