@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2018-11-25 Sun 22:27 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>transformer</title>
+<meta name="generator" content="Org mode" />
+<meta name="author" content="kuan yu" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { width: 90%; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2018 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        displayAlign: "center",
+        displayIndent: "0em",
+
+        "HTML-CSS": { scale: 100,
+                        linebreaks: { automatic: "false" },
+                        webFont: "TeX"
+                       },
+        SVG: {scale: 100,
+              linebreaks: { automatic: "false" },
+              font: "TeX"},
+        NativeMML: {scale: 100},
+        TeX: { equationNumbers: {autoNumber: "AMS"},
+               MultLineWidth: "85%",
+               TagSide: "right",
+               TagIndent: ".8em"
+             }
+});
+</script>
+<script type="text/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_HTML"></script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">transformer</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#org8872a01">1. attention</a></li>
+<li><a href="#org79fabc9">2. masking current step in self-attention</a></li>
+<li><a href="#orgca26ba8">3. convolutional attention</a></li>
+<li><a href="#orgf5f6738">4. convolution with attention</a></li>
+<li><a href="#org715a1e9">5. complexity</a>
+<ul>
+<li><a href="#orgaaaae38">5.1. original transformer self-attention layer</a></li>
+<li><a href="#org9578e15">5.2. bottleneck convolutional layer</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org8872a01" class="outline-2">
+<h2 id="org8872a01"><span class="section-number-2">1</span> attention</h2>
+<div class="outline-text-2" id="text-1">
+\begin{align*}
+k , v , q &: \mathbb{N}_{+} &&\textrm{dimensions for key, value, query}\\
+f_{k} &: \mathbb{R}^{v} \to \mathbb{R}^{k} &&\textrm{transformation for key}\\
+f_{v} &: \mathbb{R}^{v} \to \mathbb{R}^{k} &&\textrm{transformation for value}\\
+f_{q} &: \mathbb{R}^{q} \to \mathbb{R}^{k} &&\textrm{transformation for query}\\
+\\
+f_{a} &: \prod_{t : \mathbb{N}_{+}} \mathbb{R}^{t,k} \to \mathbb{R}^{k} \to \mathbb{R}^{t} &&\textrm{scaled dot-product attention}\\
+f_{a} \; w \; x &= (w \; x) / \sqrt{k} &&\\
+\\
+f &: \prod_{t : \mathbb{N}_{+}} \mathbb{R}^{t,v} \to \mathbb{R}^{q} \to \mathbb{R}^{k} &&\textrm{the attention function}\\
+f \; w \; x &= (f_{v} \; w)^{T} \; (f_{a} \; (f_{k} \; w) \; (f_{q} \; x)) &&\\
+\end{align*}
+</div>
+</div>
+
+<div id="outline-container-org79fabc9" class="outline-2">
+<h2 id="org79fabc9"><span class="section-number-2">2</span> masking current step in self-attention</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+the current step almost always gets the highest attention weight,
+but it is not necessary to consider itself since the residual connection will add itself back anyways.
+<a href="https://arxiv.org/abs/1711.02281">gu et al. (2018)</a> suggested masking current steps.
+on the other hand, if the other steps offer no valuable info, current step should simply trust in itself.
+</p>
+
+<p>
+empirically i found that the mask is useful.
+the model does not learn as fast without the mask.
+</p>
+
+<p>
+however when causal mask is present to enforce the autoregressive structure,
+adding this mask means that the first and the last steps have nothing to attend to,
+which results in nans.
+</p>
+
+<p>
+consider these two alternatives.
+</p>
+<ul class="org-ul">
+<li><code>padbos</code>: pad additional bos symbols to the input sequence,
+sacrifice (slice off) one bos at each self-attention layer when providing the attention queries.</li>
+<li><code>padnil</code>: pad one initial step for the attention values, similar to causal convolution.</li>
+</ul>
+
+<p>
+<code>padbos</code> is slightly messier to implement, however both alternatives are as efficient as the original <code>nomask</code>.
+all three performs similarly, with <code>padnil</code> slightly better (<a href="https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv">stats</a> per 250 updates).
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgca26ba8" class="outline-2">
+<h2 id="orgca26ba8"><span class="section-number-2">3</span> convolutional attention</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+<a href="https://arxiv.org/abs/1810.13320">yang et al.</a> proposed convolutional self-attention.
+the 1d version is basically the restricted attention mentioned by <a href="https://arxiv.org/abs/1706.03762">vaswani et al.</a> in the original transformer paper.
+the 2d version also queries across attention heads, which allows the averaging not to be simply component-wise.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgf5f6738" class="outline-2">
+<h2 id="orgf5f6738"><span class="section-number-2">4</span> convolution with attention</h2>
+<div class="outline-text-2" id="text-4">
+<p>
+stacking self-attention layers is wasteful.
+all but the layers which connect to data show interesting patterns,
+the others are mostly diagonal.
+considering the cost of a attention layer is much higher than that of a convolutional layer,
+we can replace all but one of them with convolution.
+</p>
+
+<p>
+the encoder becomes a stack of bottleneck convolutional layers followed by the final attention layer.
+this offers better performace on top of being more economical.
+</p>
+
+<p>
+since the most expensive part with attention is in fact the mlp that follows.
+maybe that can be replaced with convolution as well,
+but so far the results are not as good.
+</p>
+
+<p>
+how to improve the decoder with convolution?
+</p>
+</div>
+</div>
+
+<div id="outline-container-org715a1e9" class="outline-2">
+<h2 id="org715a1e9"><span class="section-number-2">5</span> complexity</h2>
+<div class="outline-text-2" id="text-5">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">b</td>
+<td class="org-right">128</td>
+<td class="org-left">bottleneck dimension</td>
+</tr>
+
+<tr>
+<td class="org-left">d</td>
+<td class="org-right">512</td>
+<td class="org-left">model dimension</td>
+</tr>
+
+<tr>
+<td class="org-left">t</td>
+<td class="org-right">64</td>
+<td class="org-left">time steps</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+ignoring minor costs:
+split, stack, scaling, masking, softmax, relu, residual connection, normalization, gain, and various biases;
+which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
+</p>
+</div>
+
+<div id="outline-container-orgaaaae38" class="outline-3">
+<h3 id="orgaaaae38"><span class="section-number-3">5.1</span> original transformer self-attention layer</h3>
+<div class="outline-text-3" id="text-5-1">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">parts</th>
+<th scope="col" class="org-left">parameters</th>
+<th scope="col" class="org-left">complexity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">key</td>
+<td class="org-left">d d</td>
+<td class="org-left">d d t</td>
+</tr>
+
+<tr>
+<td class="org-left">value</td>
+<td class="org-left">d d</td>
+<td class="org-left">d d t</td>
+</tr>
+
+<tr>
+<td class="org-left">query</td>
+<td class="org-left">d d</td>
+<td class="org-left">d d t</td>
+</tr>
+
+<tr>
+<td class="org-left">weight</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-left">d t t</td>
+</tr>
+
+<tr>
+<td class="org-left">average</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-left">d t t</td>
+</tr>
+
+<tr>
+<td class="org-left">mlp in</td>
+<td class="org-left">d d 4</td>
+<td class="org-left">d d t 4</td>
+</tr>
+
+<tr>
+<td class="org-left">mlp ex</td>
+<td class="org-left">d d 4</td>
+<td class="org-left">d d t 4</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">total</td>
+<td class="org-left">11 dd</td>
+<td class="org-left">11 ddt + 2 dtt</td>
+</tr>
+
+<tr>
+<td class="org-left">in million</td>
+<td class="org-left">2.9</td>
+<td class="org-left">188.7</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-org9578e15" class="outline-3">
+<h3 id="org9578e15"><span class="section-number-3">5.2</span> bottleneck convolutional layer</h3>
+<div class="outline-text-3" id="text-5-2">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">parts</th>
+<th scope="col" class="org-left">parameters</th>
+<th scope="col" class="org-left">complexity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">in</td>
+<td class="org-left">b d</td>
+<td class="org-left">b d t</td>
+</tr>
+
+<tr>
+<td class="org-left">conv1</td>
+<td class="org-left">b b 2</td>
+<td class="org-left">b b t 2</td>
+</tr>
+
+<tr>
+<td class="org-left">conv2</td>
+<td class="org-left">b b 2</td>
+<td class="org-left">b b t 2</td>
+</tr>
+
+<tr>
+<td class="org-left">ex</td>
+<td class="org-left">b d</td>
+<td class="org-left">b d t</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">total</td>
+<td class="org-left">2 bd + 4 bb</td>
+<td class="org-left">2 bdt + 4 bbt</td>
+</tr>
+
+<tr>
+<td class="org-left">in million</td>
+<td class="org-left">0.2</td>
+<td class="org-left">12.6</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: kuan yu</p>
+<p class="date">Created: 2018-11-25 Sun 22:27</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
