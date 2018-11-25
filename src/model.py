@@ -87,17 +87,17 @@ class ConvBlock(Record):
         self.act = act
         self.name = name
         with tf.variable_scope(name):
-            self.ante = Affine(dim_mid, dim, 'ante')
+            self.ante = Conv(dim_mid, dim, (1,), 'ante')
             self.conv = tuple(Conv(dim_mid, name= "conv{}".format(1+i)) for i in range(depth))
-            self.post = Affine(dim, dim_mid, 'post')
-            self.norm = Normalize(dim, name= 'norm')
+            self.post = Conv(dim_mid, dim, (1,), 'post')
+            self.norm = Normalize((dim, 1), name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with tf.variable_scope(name or self.name):
             y = self.ante(x) # act here ????
             for conv in self.conv:
-                y = self.act(conv(tf.pad(y, ((0,0),(1,0),(0,0))), 'VALID'))
-            return self.norm(x + dropout(self.post(y)))
+                y = self.act(conv(tf.pad(y, ((0,0),(0,0),(1,0)))))
+            return self.norm(x + dropout(self.post(y)), axis= 1)
 
 
 class Transformer(Record):
@@ -202,7 +202,9 @@ class Transformer(Record):
         with tf.variable_scope('emb_src_infer'):
             w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src.embed(self.src))
         with tf.variable_scope('encode_infer'):
+            w = tf.transpose(w, (0, 2, 1))
             for conv in self.enc_conv: w = conv(w, dropout)
+            w = tf.transpose(w, (0, 2, 1))
             w = self.enc_satt(w, w, self.mask_src, dropout)
         with tf.variable_scope('decode_infer'):
             with tf.variable_scope('init'):
@@ -210,7 +212,7 @@ class Transformer(Record):
                 pos = self.position(t)
                 i = tf.constant(0)
                 x = tf.fill((b, 1), self.bos, 'x')
-                c, c_shape = tf.zeros((b, 1,          128), name= 'c'), tf.TensorShape((None,    1,          128))
+                c, c_shape = tf.zeros((b, 128,          1), name= 'c'), tf.TensorShape((None,  128,            1))
                 v, v_shape = tf.zeros((b, 1, self.dim_emb), name= 'v'), tf.TensorShape((None, None, self.dim_emb))
                 y, y_shape = tf.zeros((b, 0, self.dim_tgt), name= 'y'), tf.TensorShape((None, None, self.dim_tgt))
                 p, p_shape = tf.zeros((b, 0),     tf.int32, name= 'p'), tf.TensorShape((None, None))
@@ -223,14 +225,16 @@ class Transformer(Record):
                 # p : (b, i)            predictions
                 with tf.variable_scope('emb_tgt'): x = pos[i] + dropout(self.emb_tgt.embed(x))
                 j, ds = 0, []
+                x = tf.transpose(x, (0, 2, 1))
                 for dec in self.dec_conv:
                     with tf.variable_scope(dec.name):
                         d = dec.ante(x)
                         for conv in dec.conv:
                             ds.append(d)
-                            d = dec.act(conv(tf.concat((cs[j], d), 1), 'VALID'))
+                            d = dec.act(conv(tf.concat((cs[j], d), -1)))
                             j += 1
-                        x = dec.norm(x + dropout(dec.post(d)))
+                        x = dec.norm(x + dropout(dec.post(d)), axis= 1)
+                x = tf.transpose(x, (0, 2, 1))
                 with tf.variable_scope('cache_v'): u = tf.concat((v, x), 1)
                 x = self.dec_satt(x, v, None, w, self.mask, dropout)
                 x = self.logit(x)
@@ -249,7 +253,7 @@ class Transformer(Record):
             _, _, _, _, y, p = tf.while_loop(
                 cond, body
                 # fixme change hard coded 8
-                , (i      , x      , (c      ,)*8, v,       y      , p)
+                , (i      , x      , (c      ,)*8, v,       y      , p      )
                 , (i.shape, x.shape, (c_shape,)*8, v_shape, y_shape, p_shape)
                 , back_prop= False
                 , swap_memory= True
@@ -282,10 +286,14 @@ class Transformer(Record):
         with tf.variable_scope('emb_tgt_'):
             x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt.embed(self.tgt))
         with tf.variable_scope('encode_'):
+            w = tf.transpose(w, (0, 2, 1))
             for conv in self.enc_conv: w = conv(w, dropout)
+            w = tf.transpose(w, (0, 2, 1))
             w = self.enc_satt(w, w, self.mask_src, dropout)
         with tf.variable_scope('decode_'):
+            x = tf.transpose(x, (0, 2, 1))
             for conv in self.dec_conv: x = conv(x, dropout)
+            x = tf.transpose(x, (0, 2, 1))
             with tf.variable_scope('mask'):
                 t = tf.shape(x)[1]
                 m = tf.log(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense())
