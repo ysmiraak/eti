@@ -38,11 +38,28 @@ consider these two alternatives.
 =padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
 all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]] per 250 updates).
 
-* convolution
+* convolutional attention
 
 [[https://arxiv.org/abs/1810.13320][yang et al.]] proposed convolutional self-attention.
 the 1d version is basically the restricted attention mentioned by [[https://arxiv.org/abs/1706.03762][vaswani et al.]] in the original transformer paper.
 the 2d version also queries across attention heads, which allows the averaging not to be simply component-wise.
+
+* convolution with attention
+
+stacking self-attention layers is wasteful.
+all but the layers which connect to data show interesting patterns,
+the others are mostly diagonal.
+considering the cost of a attention layer is much higher than that of a convolutional layer,
+we can replace all but one of them with convolution.
+
+the encoder becomes a stack of bottleneck convolutional layers followed by the final attention layer.
+this offers better performace on top of being more economical.
+
+since the most expensive part with attention is in fact the mlp that follows.
+maybe that can be replaced with convolution as well,
+but so far the results are not as good.
+
+how to improve the decoder with convolution?
 
 * complexity
 
@@ -52,7 +69,7 @@ the 2d version also queries across attention heads, which allows the averaging n
 
 ignoring minor costs:
 split, stack, scaling, masking, softmax, relu, residual connection, normalization, gain, and various biases;
-which all at most have \(O(d)\) parameters and \(O(dt)\) complexity.
+which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 
 ** original transformer self-attention layer
 
@@ -69,7 +86,7 @@ which all at most have \(O(d)\) parameters and \(O(dt)\) complexity.
 | total      | 11 dd      | 11 ddt + 2 dtt |
 | in million | 2.9        | 188.7          |
 
-** bottlenecked convolutional layer
+** bottleneck convolutional layer
 
 | parts      | parameters  | complexity    |
 |------------+-------------+---------------|
