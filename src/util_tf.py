@@ -157,23 +157,24 @@ class Affine(Record):
 
 
 class Conv(Record):
-    """channal-last convolution from `m` to `n` channels"""
+    """channal-first convolution from `m` to `n` channels"""
 
     def __init__(self, n, m= None, shape= (2,), name= 'conv', init= init_relu):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
             self.kern = tf.get_variable('kern', shape + (m, n), tf.float32, init)
-            self.bias = tf.get_variable('bias', n, tf.float32, init0)
+            self.bias = tf.get_variable('bias', (1, n) + (1,) * len(shape), tf.float32, init0)
 
-    def __call__(self, x, padding= 'SAME', stride= None, dilation= None, name= None):
+    def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
         with tf.variable_scope(name or self.name):
             return self.bias + tf.nn.convolution(
                 input= x
                 , filter= self.kern
                 , padding= padding
                 , strides= stride
-                , dilation_rate= dilation)
+                , dilation_rate= dilation
+                , data_format= ('NCW', 'NCHW', 'NCDHW')[len(self.kern.shape) - 3])
 
 
 class Multilayer(Record):
