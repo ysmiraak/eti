@@ -27,7 +27,7 @@ master = Record(
     ### training schedule
     , batch_train = 64
     , batch_valid = 512
-    , total_valid = 2560
+    , total_valid = 4096
 )
 
 
