@@ -32,8 +32,10 @@ def batch(batch= C.batch_train
             yield vpack(bas, (batch, cap), eos, np.int32) \
                 , vpack(bat, (batch, cap), eos, np.int32)
             bas, bat = [], []
-        s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
-        t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
+        # s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
+        # t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
+        s = vocab_src.encode_as_ids(src[i])
+        t = vocab_tgt.encode_as_ids(tgt[i])
         if 0 < len(s) <= cap and 0 < len(t) <= cap:
             bas.append(s)
             bat.append(t)
@@ -48,7 +50,7 @@ valid = modat.build(trainable= False)
 infer = modat.infer()
 
 # # for profiling
-# m, src, tgt = modat, src_valid[:C.batch_valid], tgt_valid[:C.batch_valid]
+# m, src, tgt = modat, src_valid[:32], tgt_valid[:32]
 # from util_tf import profile
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()

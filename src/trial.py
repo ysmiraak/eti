@@ -1,8 +1,8 @@
 from util import Record
 
 
-master = Record(
-    trial  = 'm'
+config = Record(
+    trial  = 'c4sm-samsam_ncw_'
     , ckpt = None
     , seed = 0
     ### data spec
@@ -15,7 +15,7 @@ master = Record(
     , dim_tgt = 8192
     , dim_emb = 512
     , dim_mid = 2048
-    , depth   = 4
+    , depth   = 2 # currently unused
     ### regularization
     , dropout = 0.1
     , smooth  = 0.1
@@ -26,13 +26,6 @@ master = Record(
     , epsilon = 1e-9
     ### training schedule
     , batch_train = 64
-    , batch_valid = 512
+    , batch_valid = 256
     , total_valid = 4096
 )
-
-
-wide = Record(master, dim_mid= 2048)
-deep = Record(master, depth= 4)
-
-
-config = Record(master, trial= 'cd', ckpt= None)

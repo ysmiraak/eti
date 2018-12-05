@@ -4,8 +4,8 @@ import pickle
 
 
 path = Record(
-    log = expanduser("~/cache/tensorboard-logdir/eti")
-    # , raw = expanduser("~/data/wmt/de-en")
+    log = "~/cache/tensorboard-logdir/eti"
+    # , raw = "~/data/wmt/de-en"
     , raw = "../data"
     , pred = "../trial/pred"
     , ckpt = "../trial/ckpt"
@@ -15,7 +15,7 @@ path = Record(
 
 def pform(path, *names, sep= ''):
     """formats a path as `path` followed by `names` joined with `sep`."""
-    return join(path, sep.join(map(str, names)))
+    return join(expanduser(path), sep.join(map(str, names)))
 
 
 def load_txt(filename):

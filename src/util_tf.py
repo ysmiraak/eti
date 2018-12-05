@@ -1,11 +1,5 @@
-from copy import copy
-from util import Record
+from util import Record, identity
 import tensorflow as tf
-
-
-init0 = tf.initializers.zeros()
-init1 = tf.initializers.ones()
-init_relu = tf.keras.initializers.he_uniform()
 
 
 def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
@@ -39,25 +33,35 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
-def normalize(x, axis= -1, eps= 1e-8, name= 'normalize'):
-    """returns a tensor from `x` scaled and centered across `axis`."""
-    with tf.variable_scope(name):
-        mean, var = tf.nn.moments(x, axis, keep_dims= True)
-        return (x - mean) * tf.rsqrt(var + eps * eps)
+def variable(name, shape, init):
+    # todo doc
+    if 'zero' == init:
+        init = tf.initializers.zeros()
+    elif 'one' == init:
+        init = tf.initializers.ones()
+    elif 'vs1' == init:
+        init = tf.variance_scaling_initializer(1.0, 'fan_avg', 'uniform')
+    elif 'vs2' == init:
+        init = tf.variance_scaling_initializer(2.0, 'fan_avg', 'uniform')
+    else:
+        assert 0.0 < init
+        init = tf.random_uniform_initializer(-init, init)
+    return tf.get_variable(name, shape, initializer= init)
 
 
 class Normalize(Record):
-    """layer or batch normalization, depending on the `axis`"""
+    """layer normalization"""
 
     def __init__(self, dim, name= 'normalize'):
         self.name = name
         with tf.variable_scope(name):
-            self.gain = tf.get_variable('gain', dim, tf.float32, init1)
-            self.bias = tf.get_variable('bias', dim, tf.float32, init0)
+            self.gain = variable('gain', (1, dim, 1), 'one')
+            self.bias = variable('bias', (1, dim, 1), 'zero')
 
-    def __call__(self, x, axis= -1, eps= 1e-8, name= None):
+    def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
-            return self.bias + self.gain * normalize(x, axis, eps)
+            mean, var = tf.nn.moments(x, 1, keep_dims= True)
+            return (x - mean) * tf.rsqrt(var + 1e-12) * self.gain + self.bias
 
 
 class Smooth(Record):
@@ -81,7 +85,7 @@ class Smooth(Record):
 
 class Dropout(Record):
     """dropout shape must be a tuple of None or 1 or a fixed known
-    dimension, such as `(None, 1, 256)`.  when applied to a tensor,
+    dimension, such as `(None, 256, 1)`.  when applied to a tensor,
     None will be filled, and the whole shape broadcast to fit.
 
     """
@@ -101,194 +105,126 @@ class Dropout(Record):
             return tf.nn.dropout(x, self.keep, shape)
 
 
-class Maxout(Record):
+class Embed(Record):
 
-    def __init__(self, k, name= 'maxout'):
-        self.k = k
+    def __init__(self, n, m, name= 'embed'):
         self.name = name
+        with tf.variable_scope(name):
+            init = (6 / (m / n + 1)) ** 0.5
+            self.kern = variable('kern', (m, n), init)
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
-            slist, shape = x.shape.as_list(), tf.shape(x)
-            for i, d in enumerate(slist):
-                if d is None: slist[i] = shape[i]
-            slist[-1] = slist[-1] // self.k
-            slist.append(self.k)
-            return tf.reduce_max(tf.reshape(x, slist), -1)
+            return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
 
 
 class Linear(Record):
     """linear transformation from `m` to `n`"""
 
-    def __init__(self, n, m= None, name= 'linear', init= None):
+    def __init__(self, n, m= None, name= 'linear'):
         if m is None: m = n
         self.name = name
         with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', (m, n), tf.float32, init)
+            self.kern = variable('kern', (m, n), 'vs1')
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
-            return tf.tensordot(x, self.kern, 1)
-
-    def embed(self, x, name= 'embed'):
-        return tf.gather(self.kern, x, name= name or self.name)
-
-    def transpose(self, name= 'transpose'):
-        self = copy(self)
-        self.name = name
-        with tf.variable_scope(name):
-            self.kern = tf.transpose(self.kern)
-        return self
-
-
-class Affine(Record):
-    """affine transformation from `m` to `n`"""
-
-    def __init__(self, n, m= None, name= 'affine', init= None):
-        if m is None: m = n
-        self.name = name
-        with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', (m, n), tf.float32, init)
-            self.bias = tf.get_variable('bias', n, tf.float32, init0)
-
-    def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
-            return self.bias + tf.tensordot(x, self.kern, 1)
+            shape = tf.shape(x)
+            shape = [s.value or shape[i] for i, s in enumerate(x.shape)]
+            return tf.reshape(tf.reshape(x, (-1, shape[-1])) @ self.kern, (shape[0], shape[1], -1))
 
 
 class Conv(Record):
-    """channal-first convolution from `m` to `n` channels"""
+    """convolution from `m` to `n` channels.
 
-    def __init__(self, n, m= None, shape= (2,), name= 'conv', init= init_relu):
-        if m is None: m = n
-        self.name = name
-        with tf.variable_scope(name):
-            self.kern = tf.get_variable('kern', shape + (m, n), tf.float32, init)
-            self.bias = tf.get_variable('bias', (1, n) + (1,) * len(shape), tf.float32, init0)
-
-    def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
-        with tf.variable_scope(name or self.name):
-            return self.bias + tf.nn.convolution(
-                input= x
-                , filter= self.kern
-                , padding= padding
-                , strides= stride
-                , dilation_rate= dilation
-                , data_format= ('NCW', 'NCHW', 'NCDHW')[len(self.kern.shape) - 3])
-
-
-class Multilayer(Record):
-    """mlp from `m` to `n`, with `mid` dimension(s)"""
-
-    def __init__(self, n, m= None, mid= None, act= Maxout(2), name= 'multilayer', init= None):
-        if m is None: m = n
-        if mid is None: mid = m
-        if isinstance(mid, int): mid = mid,
-        if isinstance(act, Maxout): mid = [act.k * i for i in mid]
-        self.act = act
-        self.name = name
-        with tf.variable_scope(name):
-            self.out = Affine(n, mid[-1], 'out')
-            if 1 == len(mid):
-                self.mid = Affine(mid[0], m, 'mid', init),
-            else:
-                self.mid, j = [], m
-                for i in mid:
-                    self.mid.append(Affine(i, j, 'm{}d'.format(i), init))
-                    j = i
-                self.mid = tuple(self.mid)
-
-    def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
-            for mid in self.mid:
-                x = self.act(mid(x))
-            return self.out(x)
-
-
-class AdditiveAttention(Record):
-
-    def __init__(self, n, m= None, name= 'attention', mid= 4, act= Maxout(2)):
-        if m is None: m = n
-        if mid is None: mid = m
-        if isinstance(act, Maxout): mid *= act.k
-        self.act = act
-        self.name = name
-        with tf.variable_scope(name):
-            self.q = Affine(mid, m, 'q')
-            self.k = Linear(mid, n, 'k')
-            self.a = Linear(1, mid, 'a')
-
-    def __call__(self, query, value, mask= None, name= None):
-        # query:btq -> value:bsd -> btd
-        with tf.variable_scope(name or self.name):
-            # bts <- bts1 <- btsk <- (b1sk <- bsk <- bsd) + (bt1k <- btk <- btq)
-            a = tf.squeeze(self.a(self.act(tf.expand_dims(self.k(value), 1) + tf.expand_dims(self.q(query), 2))), 3)
-            if mask is not None: a += mask
-            return tf.nn.softmax(a) @ value # btd <- bts @ bsd
-
-
-class TransformerAttention(Record):
-    """computes multi-head attention from `query` and `value` tensors.
-
-    with batch size `b`, time steps `t,s`, dimensions `m,n`
-
-    - query : b,t,m
-    - value : b,s,n
-
-    the returned tensor has shape `b,t,n`, and `mask` when supplied
-    should have shape `t,s`.
+    the default parameters make a position-wise affine layer.
 
     """
 
-    def __init__(self, n, m= None, name= 'attention', **largs):
+    def __init__(self, n, m= None, shape= (1,), act= None, name= 'conv'):
         if m is None: m = n
-        self.n = n
+        self.act = act or identity
+        self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with tf.variable_scope(name):
-            self.q = Linear(n, m, 'q')
-            self.k = Linear(n, n, 'k')
-            self.v = Linear(n, n, 'v')
+            self.kern = variable('kern', shape + (m, n), 'vs2' if tf.nn.relu == act else 'vs1')
+            self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero')
+
+    def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
+        with tf.variable_scope(name or self.name):
+            return self.act(self.bias + tf.nn.convolution(
+                x, self.kern
+                , padding= padding
+                , strides= stride
+                , dilation_rate= dilation
+                , data_format= self.form))
+
+
+class Multilayer(Record):
+    """position-wise mlp from `m` to `n`, with `dim` type units between
+
+    if dim is None,          m -> n
+
+    if isinstance(dim, int), m -> dim -> act -> n
+
+    if dim == (d1, ..., dx), m -> d1 -> act -> ... -> dx -> act -> n
+
+    """
+
+    def __init__(self, n, m= None, dim= None, act= tf.nn.relu, name= 'multilayer'):
+        if m is None: m = n
+        if dim is None: dim = ()
+        if isinstance(dim, int): dim = dim,
+        dim = (m,) + dim
+        self.name = name
+        with tf.variable_scope(name):
+            self.layers = tuple(
+                Conv(i, j, act= act, name= "layer{}".format(k)) for k, (j, i) in enumerate(zip(dim, dim[1:]), 1)
+            ) + (Conv(n, dim[-1], name= 'layer'),)
+
+    def __call__(self, x, name= None):
+        with tf.variable_scope(name or self.name):
+            for layer in self.layers: x = layer(x)
+            return x
+
+
+class Attention(Record):
+    """computes multi-head scaled dot-product attention
+
+    query : tensor f32 (b, d_q, t)
+    value : tensor f32 (b, d_v, s)
+     mask : tensor f32 (b,   s, t)
+         -> tensor f32 (b, dim, t)
+
+    `dim` must be divisible by `head`
+
+    `mask` has on-values 0 and off-values -inf
+
+    """
+
+    def __init__(self, dim, d_q= None, d_v= None, name= 'attention'):
+        if d_q is None: d_q = dim
+        if d_v is None: d_v = dim
+        self.dim = dim
+        self.name = name
+        with tf.variable_scope(name):
+            self.q = Conv(dim, d_q, name= 'q')
+            self.k = Conv(dim, d_v, name= 'k')
+            self.v = Conv(dim, d_v, name= 'v')
 
     def __call__(self, query, value, mask= None, name= None, head= 8):
-        # query:btm -> value:bsn -> btn
-        assert not self.n % head
-        stack_split = lambda x: tf.stack(tf.split(x, head, -1)) # btn -> hbtc
-        with tf.variable_scope(name or self.name):
-            # hbts <- (hbtc <- btn <- btm) @ (hbcs <- hbsc <- btn <- btn)
-            a = tf.matmul(stack_split(self.q(query)), stack_split(self.k(value)), transpose_b= True)
-            a *= (self.n // head) ** -0.5
-            if mask is not None: a += mask
-            a = tf.nn.softmax(a)
-            # btn <- hbtc <- hbts @ (hbsc <- bsn <- bsn)
-            return tf.concat(tf.unstack(a @ stack_split(self.v(value))), -1)
-
-
-class QueryAttention(Record):
-
-    def __init__(self, n, m= None, name= 'attention', layer= Multilayer, **largs):
-        if m is None: m = n
-        self.n = n
-        self.name = name
-        with tf.variable_scope(name):
-            self.q = layer(n, m, name= 'q', **largs)
-
-    def __call__(self, query, value, mask= None, name= None, softmax= True, scale= True, head= 1):
-        # query:btm -> value:bsn -> btn
+        assert not self.dim % head
         if 1 < head:
-            assert not self.n % head
-            stack_split = lambda x: tf.stack(tf.split(x, head, -1)) # btn -> hbtc
+            fork = lambda x: tf.stack(tf.split(x, head, axis= 1))
+            join = lambda x: tf.concat(tf.unstack(x), axis= 1)
+        else:
+            fork = join = identity
         with tf.variable_scope(name or self.name):
-            query = self.q(query) # btn <- btm
-            if 1 < head: query, value = stack_split(query), stack_split(value)
-            a = tf.matmul(query, value, transpose_b= True) # bts <- btn @ (bns <- bsn)
-            if softmax:
-                if scale: a *= self.n ** -0.5
-                if mask is not None: a += mask
-                a = tf.nn.softmax(a)
-            else:
-                if mask is not None: a *= tf.exp(mask)
-                a = tf.square(a)
-                a /= tf.reduce_sum(a, -1, True) + 1e-8
-            a @= value # btn <- bts @ bsn
-            if 1 < head: a = tf.concat(tf.unstack(a), -1)
-            return a
+            k = fork(self.k(value)) # hbcs <- bds <- bvs
+            v = fork(self.v(value)) # hbcs <- bds <- bvs
+            q = fork(self.q(query)) # hbct <- bdt <- bqt
+            a = tf.matmul(k, q, transpose_a= True) # hbst <- (hbsc <- hbcs) @ hbct
+            a *= ((self.dim // head) ** -0.5)
+            if mask is not None: a += mask
+            a = tf.nn.softmax(a, axis= -2)
+            return join(v @ a) # bdt <- bhct <- hbcs @ hbst

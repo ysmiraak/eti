@@ -38,7 +38,7 @@ def spm(name, path, size, bos= -1, eos= -1, unk= 0, coverage= 0.9995):
     return load_spm(name + ".model")
 
 
-def encode(vocab, sents, length= None, dtype= np.int32, eos= '</s>'):
+def encode(vocab, sents, length= None, dtype= np.int32):
     """-> array dtype
 
     encodes `sents : seq str` with `vocab : SentencePieceProcessor`.
@@ -48,7 +48,7 @@ def encode(vocab, sents, length= None, dtype= np.int32, eos= '</s>'):
     """
     sents = list(map(vocab.encode_as_ids, sents))
     if length is None: length = max(map(len, sents))
-    return vpack(sents, (len(sents), length), vocab[eos], dtype)
+    return vpack(sents, (len(sents), length), vocab.eos_id(), dtype)
 
 
 def decode(vocab, array):
@@ -59,4 +59,9 @@ def decode(vocab, array):
 
     """
     if 1 < array.ndim: return (decode(vocab, arr) for arr in array)
-    return vocab.decode_ids(list(map(int, array)))
+    ids = list(map(int, array))
+    try:
+        ids = ids[:ids.index(vocab.eos_id())]
+    except ValueError:
+        pass
+    return vocab.decode_ids(ids)
