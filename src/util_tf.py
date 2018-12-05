@@ -1,4 +1,4 @@
-from util import Record, identity
+from util import Record
 import tensorflow as tf
 
 
@@ -33,19 +33,25 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
-def variable(name, shape, init):
+def variable(name, shape, init
+             , avg2= tf.variance_scaling_initializer(2.0, 'fan_avg', 'uniform')
+             , avg1= tf.variance_scaling_initializer(1.0, 'fan_avg', 'uniform')
+             , unit= tf.initializers.ones()
+             , zero= tf.initializers.zeros()):
     # todo doc
     if 'zero' == init:
-        init = tf.initializers.zeros()
-    elif 'one' == init:
-        init = tf.initializers.ones()
-    elif 'vs1' == init:
-        init = tf.variance_scaling_initializer(1.0, 'fan_avg', 'uniform')
-    elif 'vs2' == init:
-        init = tf.variance_scaling_initializer(2.0, 'fan_avg', 'uniform')
+        init = zero
+    elif 'unit' == init:
+        init = unit
+    elif 'avg1' == init:
+        init = avg1
+    elif 'avg2' == init:
+        # init = avg2
+        init = avg1
     else:
         assert 0.0 < init
-        init = tf.random_uniform_initializer(-init, init)
+        # init = tf.random_uniform_initializer(-init, init)
+        init = avg1
     return tf.get_variable(name, shape, initializer= init)
 
 
@@ -55,7 +61,7 @@ class Normalize(Record):
     def __init__(self, dim, name= 'normalize'):
         self.name = name
         with tf.variable_scope(name):
-            self.gain = variable('gain', (1, dim, 1), 'one')
+            self.gain = variable('gain', (1, dim, 1), 'unit')
             self.bias = variable('bias', (1, dim, 1), 'zero')
 
     def __call__(self, x, name= None):
@@ -65,7 +71,7 @@ class Normalize(Record):
 
 
 class Smooth(Record):
-    """binary smoothing if dim is None or one-hot smoothing"""
+    """binary smoothing if dim is None or channel-last one-hot smoothing"""
 
     def __init__(self, rate, dim= None, name= 'smooth'):
         self.dim = dim
@@ -131,7 +137,7 @@ class Logit(Record):
             if m is None: m = n
             self.name = name
             with tf.variable_scope(name):
-                self.kern = variable('kern', (m, n), 'vs1')
+                self.kern = variable('kern', (m, n), 'avg1')
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
@@ -149,21 +155,24 @@ class Conv(Record):
 
     def __init__(self, n, m= None, shape= (1,), act= None, name= 'conv'):
         if m is None: m = n
-        self.act = act or identity
+        self.act = act
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with tf.variable_scope(name):
-            self.kern = variable('kern', shape + (m, n), 'vs2' if tf.nn.relu == act else 'vs1')
+            self.kern = variable('kern', shape + (m, n), 'avg2' if tf.nn.relu == act else 'avg1')
             self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero')
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
         with tf.variable_scope(name or self.name):
-            return self.act(self.bias + tf.nn.convolution(
+            x = tf.nn.convolution(
                 x, self.kern
                 , padding= padding
                 , strides= stride
                 , dilation_rate= dilation
-                , data_format= self.form))
+                , data_format= self.form)
+            if self.bias is not None: x += self.bias
+            if self.act is not None: x = self.act(x)
+            return x
 
 
 class Multilayer(Record):
@@ -199,7 +208,7 @@ class Attention(Record):
 
     query : tensor f32 (b, d_q, t)
     value : tensor f32 (b, d_v, s)
-     mask : tensor f32 (b,   s, t)
+     mask : tensor f32 (b,   t, s)
          -> tensor f32 (b, dim, t)
 
     `dim` must be divisible by `head`
@@ -214,23 +223,24 @@ class Attention(Record):
         self.dim = dim
         self.name = name
         with tf.variable_scope(name):
-            self.q = Conv(dim, d_q, name= 'q')
-            self.k = Conv(dim, d_v, name= 'k')
             self.v = Conv(dim, d_v, name= 'v')
+            self.k = Conv(dim, d_v, name= 'k')
+            self.q = Conv(dim, d_q, name= 'q')
 
     def __call__(self, query, value, mask= None, name= None, head= 8):
         assert not self.dim % head
-        if 1 < head:
-            fork = lambda x: tf.stack(tf.split(x, head, axis= 1))
-            join = lambda x: tf.concat(tf.unstack(x), axis= 1)
-        else:
-            fork = join = identity
         with tf.variable_scope(name or self.name):
-            k = fork(self.k(value)) # hbcs <- bds <- bvs
-            v = fork(self.v(value)) # hbcs <- bds <- bvs
-            q = fork(self.q(query)) # hbct <- bdt <- bqt
-            a = tf.matmul(k, q, transpose_a= True) # hbst <- (hbsc <- hbcs) @ hbct
+            v = self.v(value) # bds <- bvs
+            k = self.k(value) # bds <- bvs
+            q = self.q(query) # bdt <- bqt
+            if 1 < head:
+                v = tf.stack(tf.split(v, head, axis= 1)) # hbcs <- bds
+                k = tf.stack(tf.split(k, head, axis= 1)) # hbcs <- bds
+                q = tf.stack(tf.split(q, head, axis= 1)) # hbct <- bdt
+            a = tf.matmul(q, k, transpose_a= True) # hbts <- (hbtc <- hbct) @ hbcs
             a *= ((self.dim // head) ** -0.5)
             if mask is not None: a += mask
-            a = tf.nn.softmax(a, axis= -2)
-            return join(v @ a) # bdt <- bhct <- hbcs @ hbst
+            a = tf.nn.softmax(a, axis= -1)
+            y = tf.matmul(v, a, transpose_b= True) # hbct <- hbcs @ (hbst <- hbts)
+            if 1 < head: y = tf.concat(tf.unstack(y), axis= 1) # bdt <- hbct
+            return y

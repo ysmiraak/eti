@@ -12,8 +12,10 @@ def sinusoid(dim, time, freq= 1e-4, array= False):
     assert not dim % 2
     if array:
         a = (freq ** ((2 / dim) * np.arange(dim // 2))).reshape(-1, 1) @ (1 + np.arange(time).reshape(1, -1))
-        return np.concatenate((np.sin(a), np.cos(a)), -1).reshape(dim, time)
+        return np.concatenate((np.sin(a), np.cos(a)), -1).reshape(dim, time) \
+            * (dim ** -0.5)
     else:
+        assert False # figure out a better way to do this
         a = tf.reshape(
             freq ** ((2 / dim) * tf.range(dim // 2, dtype= tf.float32))
             , (-1, 1)) @ tf.reshape(
@@ -149,7 +151,7 @@ class Transformer(Record):
              src : i32 (b, s)    source with `eos` trimmed among the batch
              tgt : i32 (b, t)    target with `eos` trimmed among the batch, padded with `bos`
             gold : i32 (b, t)    target one step ahead, padded with `eos`
-            mask : f32 (b, s, 1) bridge mask
+            mask : f32 (b, 1, s) bridge mask
         mask_src : f32 (b, s, s) source mask
 
         """
@@ -160,7 +162,7 @@ class Transformer(Record):
                 not_eos = tf.to_float(tf.not_equal(src_, self.eos))
             with tf.variable_scope('len_src'):
                 len_src = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
-            not_eos = tf.expand_dims(not_eos[:,:len_src], axis= -1)
+            not_eos = tf.expand_dims(not_eos[:,:len_src], axis= 1)
             src = src_[:,:len_src]
         with tf.variable_scope('mask_src'):
             mask_src = tf.log(not_eos + (1.0 - tf.eye(len_src)))
@@ -271,7 +273,7 @@ class Transformer(Record):
         with tf.variable_scope('decode_'): # mark
             with tf.variable_scope('mask'):
                 t = tf.shape(x)[-1]
-                m = tf.log(tf.transpose(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense()))
+                m = tf.log(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense())
             for i, dec in enumerate(self.decode):
                 with tf.variable_scope("pad{}".format(1+i)):
                     v = tf.pad(x[:,:-1], ((0,0),(1,0),(0,0)))
