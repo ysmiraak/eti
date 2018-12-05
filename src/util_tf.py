@@ -118,20 +118,26 @@ class Embed(Record):
             return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
 
 
-class Linear(Record):
-    """linear transformation from `m` to `n`"""
+class Logit(Record):
 
-    def __init__(self, n, m= None, name= 'linear'):
-        if m is None: m = n
-        self.name = name
-        with tf.variable_scope(name):
-            self.kern = variable('kern', (m, n), 'vs1')
+    def __init__(self, n, m= None, name= 'logit'):
+        if isinstance(n, Embed):
+            assert m is None
+            kern = n.kern
+            self.name = name
+            with tf.variable_scope(name):
+                self.kern = tf.transpose(kern) * (int(kern.shape[1]) ** -0.5)
+        else:
+            if m is None: m = n
+            self.name = name
+            with tf.variable_scope(name):
+                self.kern = variable('kern', (m, n), 'vs1')
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
             shape = tf.shape(x)
             shape = [s.value or shape[i] for i, s in enumerate(x.shape)]
-            return tf.reshape(tf.reshape(x, (-1, shape[-1])) @ self.kern, (shape[0], shape[1], -1))
+            return tf.reshape(tf.reshape(x, (-1, shape[-1])) @ self.kern, shape[:-1] + [int(self.kern.shape[1])])
 
 
 class Conv(Record):

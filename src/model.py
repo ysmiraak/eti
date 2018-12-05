@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention, Linear
+from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Embed, Logit, Conv, Multilayer, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -113,12 +113,12 @@ class Transformer(Record):
     def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, bos):
         """-> Transformer with fields
 
-           logit : Linear
+           logit : Logit
           decode : tuple DecodeBlock
         enc_satt : EncodeBlock
         enc_conv : tuple ConvBlock
-         emb_tgt : Linear
-         emb_src : Linear
+         emb_tgt : Embed
+         emb_src : Embed
 
         """
         assert not dim_emb % 2
@@ -128,7 +128,7 @@ class Transformer(Record):
         with tf.variable_scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
         return Transformer(
-            logit= Linear(dim_tgt, dim_emb, name= 'logit')
+            logit= Logit(dim_tgt, dim_emb, name= 'logit')
             , decode= decode # mark
             , enc_satt= enc_satt
             , enc_conv= enc_conv

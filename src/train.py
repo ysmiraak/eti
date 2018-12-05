@@ -84,6 +84,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
         , tgt= tgt_valid
         , batch= C.batch_valid)))
     wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
+    wtr.flush()
 
 def trans(sents, model= infer):
     if not isinstance(sents, np.ndarray):
