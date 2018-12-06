@@ -276,7 +276,7 @@ class Transformer(Record):
                 m = tf.log(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense())
             for i, dec in enumerate(self.decode):
                 with tf.variable_scope("pad{}".format(1+i)):
-                    v = tf.pad(x[:,:-1], ((0,0),(1,0),(0,0)))
+                    v = tf.pad(x[:,:,:-1], ((0,0),(1,0),(0,0)))
                 x = dec(x, v, m, w, self.mask, dropout)
         with tf.variable_scope('logit_'): y = self.logit(x)
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
