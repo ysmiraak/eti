@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Embed, Logit, Conv, Multilayer, Attention
+from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -115,7 +115,7 @@ class Transformer(Record):
     def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, bos):
         """-> Transformer with fields
 
-           logit : Logit
+           logit : Embed
           decode : tuple DecodeBlock
         enc_satt : EncodeBlock
         enc_conv : tuple ConvBlock
@@ -130,7 +130,7 @@ class Transformer(Record):
         with tf.variable_scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
         return Transformer(
-            logit= Logit(dim_tgt, dim_emb, name= 'logit')
+            logit= Embed(dim_emb, dim_tgt, name= 'logit')
             , decode= decode # mark
             , enc_satt= enc_satt
             , enc_conv= enc_conv
@@ -227,7 +227,7 @@ class Transformer(Record):
                 for v, dec in zip(vs, self.decode):
                     with tf.variable_scope('cache_v'): us.append(tf.concat((v, x), axis= -1))
                     x = dec(x, v, None, w, self.mask, dropout)
-                x = self.logit(tf.transpose(x, (0, 2, 1)))
+                with tf.variable_scope('logit'): x = self.logit(x)
                 with tf.variable_scope('pred'): x = tf.argmax(x, axis= -1, output_type= tf.int32)
                 with tf.variable_scope('cache_p'): p = tf.concat((p, x), axis= -1)
                 return i + 1, x, p, tuple(us)
@@ -278,7 +278,7 @@ class Transformer(Record):
                 with tf.variable_scope("pad{}".format(1+i)):
                     v = tf.pad(x[:,:-1], ((0,0),(1,0),(0,0)))
                 x = dec(x, v, m, w, self.mask, dropout)
-        with tf.variable_scope('logit_'): y = self.logit(tf.transpose(x, (0, 2, 1)))
+        with tf.variable_scope('logit_'): y = self.logit(x)
         with tf.variable_scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with tf.variable_scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
         with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))

@@ -10,7 +10,7 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
 
 
 def pipe(*args, prefetch= 1, repeat= -1, name= 'pipe', **kwargs):
-    """see `tf.data.Dataset.from_generator`."""
+    """see `tf.data.Dataset.from_generator`"""
     with tf.variable_scope(name):
         return tf.data.Dataset.from_generator(*args, **kwargs) \
                               .repeat(repeat) \
@@ -20,9 +20,9 @@ def pipe(*args, prefetch= 1, repeat= -1, name= 'pipe', **kwargs):
 
 
 def placeholder(dtype, shape, x= None, name= None):
-    """returns a placeholder with `dtype` and `shape`.
+    """returns a placeholder with `dtype` and `shape`
 
-    if tensor `x` is given, converts and uses it as default.
+    if tensor `x` is given, converts and uses it as default
 
     """
     if x is None: return tf.placeholder(dtype, shape, name)
@@ -33,26 +33,13 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
-def variable(name, shape, init
-             , avg2= tf.variance_scaling_initializer(2.0, 'fan_avg', 'uniform')
-             , avg1= tf.variance_scaling_initializer(1.0, 'fan_avg', 'uniform')
-             , unit= tf.initializers.ones()
-             , zero= tf.initializers.zeros()):
-    # todo doc
-    if 'zero' == init:
-        init = zero
-    elif 'unit' == init:
-        init = unit
-    elif 'avg1' == init:
-        init = avg1
-    elif 'avg2' == init:
-        # init = avg2
-        init = avg1
-    else:
-        assert 0.0 < init
-        # init = tf.random_uniform_initializer(-init, init)
-        init = avg1
-    return tf.get_variable(name, shape, initializer= init)
+def variable(name, shape, init, initializers=
+             {  'zero': tf.initializers.zeros()
+              , 'unit': tf.initializers.ones()
+              , 'out1': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
+              , 'out2': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
+             }):
+    return tf.get_variable(name, shape, initializer= initializers.get(init, init))
 
 
 class Normalize(Record):
@@ -90,9 +77,8 @@ class Smooth(Record):
 
 
 class Dropout(Record):
-    """dropout shape must be a tuple of None or 1 or a fixed known
-    dimension, such as `(None, 256, 1)`.  when applied to a tensor,
-    None will be filled, and the whole shape broadcast to fit.
+    """dropout shape may contain None (to be dynamically filled) or 1 (to
+    be broadcasted) or some fixed dimension, such as `(None, 256, 1)`
 
     """
 
@@ -112,44 +98,36 @@ class Dropout(Record):
 
 
 class Embed(Record):
+    """input and output embedding
 
-    def __init__(self, n, m, name= 'embed'):
+    embed : i32 (b, t)      -> f32 (b, din, t)
+    logit : f32 (b, din, t) -> f32 (b, t, dex)
+
+    """
+
+    def __init__(self, din, dex, name= 'embed'):
         self.name = name
         with tf.variable_scope(name):
-            init = (6 / (m / n + 1)) ** 0.5
-            self.kern = variable('kern', (m, n), init)
+            self.embed = variable('kern', (dex, din), 'out1')
+            self.logit = tf.transpose(self.embed) * ((din / dex) ** 0.5)
 
     def __call__(self, x, name= None):
         with tf.variable_scope(name or self.name):
-            return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
-
-
-class Logit(Record):
-
-    def __init__(self, n, m= None, name= 'logit'):
-        if isinstance(n, Embed):
-            assert m is None
-            kern = n.kern
-            self.name = name
-            with tf.variable_scope(name):
-                self.kern = tf.transpose(kern) * (int(kern.shape[1]) ** -0.5)
-        else:
-            if m is None: m = n
-            self.name = name
-            with tf.variable_scope(name):
-                self.kern = variable('kern', (m, n), 'avg1')
-
-    def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
-            shape = tf.shape(x)
-            shape = [s.value or shape[i] for i, s in enumerate(x.shape)]
-            return tf.reshape(tf.reshape(x, (-1, shape[-1])) @ self.kern, shape[:-1] + [int(self.kern.shape[1])])
+            if x.dtype.is_integer:
+                return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
+            else:
+                shape = tf.shape(x)
+                b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
+                return tf.reshape(
+                    tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, d))
+                    @ self.logit
+                    , (b, t, int(self.logit.shape[1])))
 
 
 class Conv(Record):
-    """convolution from `m` to `n` channels.
+    """convolution from `m` to `n` channels
 
-    the default parameters make a position-wise affine layer.
+    the default parameters make a position-wise affine layer
 
     """
 
@@ -159,7 +137,7 @@ class Conv(Record):
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with tf.variable_scope(name):
-            self.kern = variable('kern', shape + (m, n), 'avg2' if tf.nn.relu == act else 'avg1')
+            self.kern = variable('kern', shape + (m, n), 'out2' if tf.nn.relu == act else 'out1')
             self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero')
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
