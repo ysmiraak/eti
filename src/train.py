@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from model import Transformer as T, batch_run
+from model import Model, batch_run
 from tqdm import tqdm
-from trial import config as C
+from trial import config as C, paths as P, train as T
 from util import partial, select
-from util_io import path as P, pform, load_txt, save_txt, load_pkl
+from util_io import pform, load_txt, save_txt, load_pkl
 from util_np import np, vpack, sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
@@ -44,9 +44,9 @@ def batch(batch= C.batch_train
 # build model #
 ###############
 
-model = T.new(**select(C, *T._new))
+model = Model.new(**select(C, *Model._new))
 modat = model.data()
-valid = modat.build(trainable= False)
+valid = modat.valid()
 infer = modat.infer()
 
 # # for profiling
@@ -55,11 +55,9 @@ infer = modat.infer()
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()
 #     with tf.summary.FileWriter(pform(P.log, C.trial), sess.graph) as wtr:
-#         profile(sess, wtr, (infer.pred, valid.acc), feed_dict= {m.src_: src, m.tgt_: tgt})
+#         profile(sess, wtr, (infer.pred, valid.accr), feed_dict= {m.src_: src, m.tgt_: tgt})
 
-train = model.data(*pipe(batch, (tf.int32, tf.int32), prefetch= 16)) \
-             .build(**select(C, *T._build)) \
-             .train(**select(C, *T._train))
+train = model.data(*pipe(batch, (tf.int32, tf.int32), prefetch= 16)).train(**T)
 
 ############
 # training #
@@ -74,16 +72,16 @@ else:
 
 def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
-             (tf.summary.scalar('step_loss', valid.loss)
-              , tf.summary.scalar('step_acc', valid.acc)))):
-    loss, acc = map(np.mean, zip(*batch_run(
+             ( tf.summary.scalar('step_loss', valid.loss)
+             , tf.summary.scalar('step_accr', valid.accr)))):
+    loss, accr = map(np.mean, zip(*batch_run(
         sess= sess
         , model= valid
-        , fetch= (valid.loss, valid.acc)
+        , fetch= (valid.loss, valid.accr)
         , src= src_valid
         , tgt= tgt_valid
         , batch= C.batch_valid)))
-    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.acc: acc}), step)
+    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.accr: accr}), step)
     wtr.flush()
 
 def trans(sents, model= infer):

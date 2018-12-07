@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention
+from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -29,11 +29,11 @@ class Sinusoid(Record):
     def __init__(self, dim, cap= None, name= 'sinusoid'):
         self.dim = dim
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.pos = tf.constant(sinusoid(dim, cap, array= True), tf.float32) if cap else None
 
     def __call__(self, time, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             return sinusoid(self.dim, time) if self.pos is None else self.pos[:,:time]
 
 
@@ -41,18 +41,18 @@ class EncodeBlock(Record):
 
     def __init__(self, dim, dim_mid, name):
         self.name = name
-        with tf.variable_scope(name):
-            with tf.variable_scope('att'):
+        with scope(name):
+            with scope('att'):
                 self.att = Attention(dim)
                 self.norm_att = Normalize(dim)
-            with tf.variable_scope('mlp'):
+            with scope('mlp'):
                 self.mlp = Multilayer(dim, dim, dim_mid)
                 self.norm_mlp = Normalize(dim)
 
     def __call__(self, x, v, m, dropout, name= None):
-        with tf.variable_scope(name or self.name):
-            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, v, m)))
-            with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
+        with scope(name or self.name):
+            with scope('att'): x = self.norm_att(x + dropout(self.att(x, v, m)))
+            with scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
             return x
 
 
@@ -60,22 +60,22 @@ class DecodeBlock(Record):
 
     def __init__(self, dim, dim_mid, name):
         self.name = name
-        with tf.variable_scope(name):
-            with tf.variable_scope('csl'):
+        with scope(name):
+            with scope('csl'):
                 self.csl = Attention(dim)
                 self.norm_csl = Normalize(dim)
-            with tf.variable_scope('att'):
+            with scope('att'):
                 self.att = Attention(dim)
                 self.norm_att = Normalize(dim)
-            with tf.variable_scope('mlp'):
+            with scope('mlp'):
                 self.mlp = Multilayer(dim, dim, dim_mid)
                 self.norm_mlp = Normalize(dim)
 
     def __call__(self, x, v, m, w, n, dropout, name= None):
-        with tf.variable_scope(name or self.name):
-            with tf.variable_scope('csl'): x = self.norm_csl(x + dropout(self.csl(x, v, m)))
-            with tf.variable_scope('att'): x = self.norm_att(x + dropout(self.att(x, w, n)))
-            with tf.variable_scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
+        with scope(name or self.name):
+            with scope('csl'): x = self.norm_csl(x + dropout(self.csl(x, v, m)))
+            with scope('att'): x = self.norm_att(x + dropout(self.att(x, w, n)))
+            with scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
             return x
 
 
@@ -83,7 +83,7 @@ class ConvBlock(Record):
 
     def __init__(self, dim, dim_mid, depth, name):
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.ante = Conv(dim_mid, dim, shape= (1,), act= None, name= 'ante')
             self.conv = tuple(Conv(dim_mid, shape= (2,), act= tf.nn.relu, name= "conv{}".format(1+i))
                               for i in range(depth))
@@ -91,29 +91,27 @@ class ConvBlock(Record):
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             y = self.ante(x)
             for conv in self.conv:
                 y = conv(tf.pad(y, ((0,0),(0,0),(1,0))))
             return self.norm(x + dropout(self.post(y)))
 
 
-class Transformer(Record):
+class Model(Record):
     """-> Record
 
-    model = Transformer.new( ... )
-    train = model.data( ... ).build( ... ).train( ... )
-    valid = model.data( ... ).build(trainable= False)
+    model = Model.new( ... )
+    train = model.data( ... ).train( ... )
+    valid = model.data( ... ).valid( ... )
     infer = model.data( ... ).infer( ... )
 
     """
-    _new   = 'dim_emb', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap', 'eos', 'bos'
-    _build = 'dropout', 'smooth'
-    _train = 'warmup', 'beta1', 'beta2', 'epsilon'
+    _new = 'dim_emb', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap', 'eos', 'bos'
 
     @staticmethod
     def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, bos):
-        """-> Transformer with fields
+        """-> Model with fields
 
            logit : Embed
           decode : tuple DecodeBlock
@@ -124,18 +122,20 @@ class Transformer(Record):
 
         """
         assert not dim_emb % 2
-        with tf.variable_scope('encode'):
+        emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
+        emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
+        with scope('encode'):
             enc_conv = tuple(ConvBlock(dim_emb, 128, 2, "conv{}".format(1+i)) for i in range(4))
             enc_satt = EncodeBlock(dim_emb, dim_mid, "satt")
-        with tf.variable_scope('decode'): # mark
+        with scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
-        return Transformer(
-            logit= Embed(dim_emb, dim_tgt, name= 'logit')
+        return Model(
+            logit= emb_tgt.transpose(name= 'logit')
             , decode= decode # mark
             , enc_satt= enc_satt
             , enc_conv= enc_conv
-            , emb_tgt= Embed(dim_emb, dim_tgt, name= 'emb_tgt')
-            , emb_src= Embed(dim_emb, dim_src, name= 'emb_src')
+            , emb_tgt= emb_tgt
+            , emb_src= emb_src
             , dim_emb= dim_emb
             , dim_tgt= dim_tgt
             , bos= bos
@@ -143,7 +143,7 @@ class Transformer(Record):
             , cap= cap + 1)
 
     def data(self, src= None, tgt= None):
-        """-> Transformer with new fields
+        """-> Model with new fields
 
         position : Sinusoid
             src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
@@ -151,55 +151,50 @@ class Transformer(Record):
              src : i32 (b, s)    source with `eos` trimmed among the batch
              tgt : i32 (b, t)    target with `eos` trimmed among the batch, padded with `bos`
             gold : i32 (b, t)    target one step ahead, padded with `eos`
-            mask : f32 (b, 1, s) bridge mask
+        mask_tgt : f32 (1, t, t) target mask
+        mask_arr : f32 (b, 1, s) bridge mask
         mask_src : f32 (b, s, s) source mask
 
         """
         src_ = placeholder(tf.int32, (None, None), src, 'src_')
         tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
-        with tf.variable_scope('src'):
-            with tf.variable_scope('not_eos'):
-                not_eos = tf.to_float(tf.not_equal(src_, self.eos))
-            with tf.variable_scope('len_src'):
-                len_src = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
+        with scope('src'):
+            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(src_, self.eos))
+            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
             not_eos = tf.expand_dims(not_eos[:,:len_src], axis= 1)
             src = src_[:,:len_src]
-        with tf.variable_scope('mask_src'):
-            mask_src = tf.log(not_eos + (1.0 - tf.eye(len_src)))
-        with tf.variable_scope('mask'):
-            mask = tf.log(not_eos)
-        with tf.variable_scope('tgt'):
-            with tf.variable_scope('not_eos'):
-                not_eos = tf.to_float(tf.not_equal(tgt_, self.eos))
-            with tf.variable_scope('len_tgt'):
-                len_tgt = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
+        with scope('mask_src'): mask_src = tf.log(not_eos + (1.0 - tf.eye(len_src)))
+        with scope('mask_arr'): mask_arr = tf.log(not_eos)
+        with scope('tgt'):
+            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(tgt_, self.eos))
+            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
             tgt = tgt_[:,:len_tgt]
             gold = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
             tgt  = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
-        return Transformer(
+        with scope('mask_tgt'): mask_tgt = tf.log(tf.expand_dims(
+                tf.linalg.LinearOperatorLowerTriangular(tf.ones((len_tgt + 1,) * 2)).to_dense()
+                , axis= 0))
+        return Model(
             position= Sinusoid(self.dim_emb, self.cap)
-            , src_= src_, src= src
-            , tgt_= tgt_, tgt= tgt
-            , gold= gold
-            , mask= mask
-            , mask_src= mask_src
+            , src_= src_, mask_src= mask_src, src= src
+            , tgt_= tgt_, mask_tgt= mask_tgt, tgt= tgt
+            , gold= gold, mask_arr= mask_arr
             , **self)
 
     def infer(self, minimal= True):
-        """-> Transformer with new fields, autoregressive
+        """-> Model with new fields, autoregressive
 
-        len_tgt : i32 ()              steps to unfold aka t
-           pred : i32 (b, t)          prediction, hard
+        len_tgt : i32 ()     steps to unfold aka t
+           pred : i32 (b, t) prediction, hard
 
         """
         dropout = identity
-        with tf.variable_scope('emb_src_infer'):
-            w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
-        with tf.variable_scope('encode_infer'):
+        with scope('emb_src_infer'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
+        with scope('encode_infer'):
             for conv in self.enc_conv: w = conv(w, dropout)
             w = self.enc_satt(w, w, self.mask_src, dropout)
-        with tf.variable_scope('decode_infer'): # mark
-            with tf.variable_scope('init'):
+        with scope('decode_infer'): # mark
+            with scope('init'):
                 b,t = tf.shape(w)[0], placeholder(tf.int32, (), self.cap, 't')
                 pos = self.position(t)
                 i = tf.constant(0)
@@ -213,10 +208,10 @@ class Transformer(Record):
                 # p : (b,          i)   predictions
                 # v : (b, dim_emb, 1+i) attention values
                 # c : (b,     128, 1)   convolution value
-                with tf.variable_scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
+                with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
                 # j, ds = 0, []
                 # for dec in self.dec_conv:
-                #     with tf.variable_scope(dec.name):
+                #     with scope(dec.name):
                 #         d = dec.ante(x)
                 #         for conv in dec.conv:
                 #             ds.append(d)
@@ -225,14 +220,14 @@ class Transformer(Record):
                 #         x = dec.norm(x + dropout(dec.post(d)), axis= 1)
                 us = []
                 for v, dec in zip(vs, self.decode):
-                    with tf.variable_scope('cache_v'): us.append(tf.concat((v, x), axis= -1))
-                    x = dec(x, v, None, w, self.mask, dropout)
-                with tf.variable_scope('logit'): x = self.logit(x)
-                with tf.variable_scope('pred'): x = tf.argmax(x, axis= -1, output_type= tf.int32)
-                with tf.variable_scope('cache_p'): p = tf.concat((p, x), axis= -1)
+                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    x = dec(x, v, None, w, self.mask_arr, dropout)
+                x = self.logit(x)
+                x = tf.argmax(x, axis= -1, output_type= tf.int32, name= 'pred')
+                p = tf.concat((p, x), axis= -1, name= 'cache_p')
                 return i + 1, x, p, tuple(us)
             def cond(i, x, *_):
-                with tf.variable_scope('cond'):
+                with scope('cond'):
                     return ((i < t) & ~ tf.reduce_all(tf.equal(x, self.eos))) if minimal else (i < t)
             _, _, p, *_ = tf.while_loop(
                 cond, body
@@ -241,70 +236,56 @@ class Transformer(Record):
                 , back_prop= False
                 , swap_memory= True
                 , name= 'autoreg')
-        return Transformer(len_tgt= t, pred= p, **self)
+        return Model(self, len_tgt= t, pred= p)
 
-    def build(self, trainable= True, dropout= 0.1, smooth= 0.1):
-        """-> Transformer with new fields, teacher forcing
+    def valid(self, dropout= identity, smooth= None):
+        """-> Model with new fields, teacher forcing
 
           output : f32 (b, t, dim_tgt) prediction on logit scale
             prob : f32 (b, t, dim_tgt) prediction, soft
             pred : i32 (b, t)          prediction, hard
             loss : f32 ()              prediction loss
-             acc : f32 ()              accuracy
-
-        and when `trainable`
-
-         dropout : Dropout
-          smooth : Smooth
+            accr : f32 ()              accuracy
 
         """
-        if trainable:
-            dropout = Dropout(dropout, (None, self.dim_emb, None))
-            smooth  = Smooth(smooth, self.dim_tgt)
-        else:
-            dropout = smooth = identity
-        with tf.variable_scope('emb_src_'):
-            w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
-        with tf.variable_scope('emb_tgt_'):
-            x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
-        with tf.variable_scope('encode_'):
+        with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
+        with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
+        with scope('encode_'):
             for conv in self.enc_conv: w = conv(w, dropout)
             w = self.enc_satt(w, w, self.mask_src, dropout)
-        with tf.variable_scope('decode_'): # mark
-            with tf.variable_scope('mask'):
-                t = tf.shape(x)[-1]
-                m = tf.log(tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense())
+        with scope('decode_'): # mark
             for i, dec in enumerate(self.decode):
-                with tf.variable_scope("pad{}".format(1+i)):
+                with scope("pad{}".format(1+i)):
                     v = tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0)))
-                x = dec(x, v, m, w, self.mask, dropout)
-        with tf.variable_scope('logit_'): y = self.logit(x)
-        with tf.variable_scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
-        with tf.variable_scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
-        with tf.variable_scope('acc_'): acc = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
-        with tf.variable_scope('loss_'):
-            loss = tf.reduce_mean(
+                x = dec(x, v, self.mask_tgt, w, self.mask_arr, dropout)
+        y = self.logit(x, name= 'logit_')
+        with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
+        with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
+        with scope('accr_'): accr = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
+        with scope('loss_'): loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
-                if trainable else
+                if smooth else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
-        self = Transformer(output= y, prob= prob, pred= pred, loss= loss, acc= acc, **self)
-        if trainable: self.dropout, self.smooth = dropout, smooth
-        return self
+        return Model(self, output= y, prob= prob, pred= pred, loss= loss, accr= accr)
 
-    def train(self, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
-        """-> Transformer with new fields
+    def train(self, dropout= 0.1, smooth= 0.1, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
+        """-> Model with new fields, teacher forcing
 
         step : i64 () global update step
           lr : f32 () learning rate for the current step
           up :        update operation
 
+        along with all the fields from `valid`
+
         """
-        with tf.variable_scope('lr'):
+        dropout, smooth = Dropout(dropout, (None, self.dim_emb, None)), Smooth(smooth, self.dim_tgt)
+        self = self.valid(dropout= dropout, smooth= smooth)
+        with scope('lr'):
             s = tf.train.get_or_create_global_step()
             t = tf.to_float(s + 1)
             lr = (self.dim_emb ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
         up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
-        return Transformer(step= s, lr= lr, up= up, **self)
+        return Model(self, dropout= dropout, smooth= smooth, step= s, lr= lr, up= up)
 
 
 def batch_run(sess, model, fetch, src, tgt= None, batch= None):

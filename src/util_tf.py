@@ -1,5 +1,9 @@
+from copy import copy
 from util import Record
 import tensorflow as tf
+
+
+scope = tf.variable_scope
 
 
 def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
@@ -11,7 +15,7 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
 
 def pipe(*args, prefetch= 1, repeat= -1, name= 'pipe', **kwargs):
     """see `tf.data.Dataset.from_generator`"""
-    with tf.variable_scope(name):
+    with scope(name):
         return tf.data.Dataset.from_generator(*args, **kwargs) \
                               .repeat(repeat) \
                               .prefetch(prefetch) \
@@ -36,9 +40,10 @@ def placeholder(dtype, shape, x= None, name= None):
 def variable(name, shape, init, initializers=
              {  'zero': tf.initializers.zeros()
               , 'unit': tf.initializers.ones()
-              , 'out1': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
-              , 'out2': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
+              , 'rand': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
+              , 'relu': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
              }):
+    """wraps `tf.get_variable` to provide initializer based on usage"""
     return tf.get_variable(name, shape, initializer= initializers.get(init, init))
 
 
@@ -47,12 +52,12 @@ class Normalize(Record):
 
     def __init__(self, dim, name= 'normalize'):
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.gain = variable('gain', (1, dim, 1), 'unit')
             self.bias = variable('bias', (1, dim, 1), 'zero')
 
     def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             mean, var = tf.nn.moments(x, 1, keep_dims= True)
             return (x - mean) * tf.rsqrt(var + 1e-12) * self.gain + self.bias
 
@@ -63,13 +68,13 @@ class Smooth(Record):
     def __init__(self, rate, dim= None, name= 'smooth'):
         self.dim = dim
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.rate = placeholder(tf.float32, (), rate, 'rate')
             self.shared = self.rate / (dim or 2)
             self.smooth = 1.0 - self.rate
 
     def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             if self.dim:
                 return tf.one_hot(x, self.dim, self.smooth + self.shared, self.shared)
             else:
@@ -85,12 +90,12 @@ class Dropout(Record):
     def __init__(self, rate, shape= None, name= 'dropout'):
         self.shape = shape
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.rate = placeholder(tf.float32, (), rate, 'rate')
             self.keep = 1.0 - self.rate
 
     def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             if self.shape is not None:
                 shape = tf.shape(x)
                 shape = [s or shape[i] for i, s in enumerate(self.shape)]
@@ -100,28 +105,32 @@ class Dropout(Record):
 class Embed(Record):
     """input and output embedding
 
-    embed : i32 (b, t)      -> f32 (b, din, t)
-    logit : f32 (b, din, t) -> f32 (b, t, dex)
+    i32 (b, t)    -> f32 (b, n, t)
+    f32 (b, m, t) -> f32 (b, t, n)
 
     """
 
-    def __init__(self, din, dex, name= 'embed'):
+    def __init__(self, n, m, name= 'embed'):
         self.name = name
-        with tf.variable_scope(name):
-            self.embed = variable('kern', (dex, din), 'out1')
-            self.logit = tf.transpose(self.embed) * ((din / dex) ** 0.5)
+        with scope(name): self.kern = variable('kern', (m, n), 'rand')
 
     def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             if x.dtype.is_integer:
-                return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
+                return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
             else:
+                m , n = map(int, self.kern.shape)
                 shape = tf.shape(x)
                 b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
-                return tf.reshape(
-                    tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, d))
-                    @ self.logit
-                    , (b, t, int(self.logit.shape[1])))
+                assert m == d
+                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, m)) @ self.kern, (b, t, n))
+
+    def transpose(self, name= None):
+        m, n = map(int, self.kern.shape)
+        self = copy(self)
+        self.name = name or self.name
+        with scope(self.name): self.kern = tf.transpose(self.kern) * ((n / m) ** 0.5)
+        return self
 
 
 class Conv(Record):
@@ -136,12 +145,12 @@ class Conv(Record):
         self.act = act
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
-        with tf.variable_scope(name):
-            self.kern = variable('kern', shape + (m, n), 'out2' if tf.nn.relu == act else 'out1')
+        with scope(name):
+            self.kern = variable('kern', shape + (m, n), 'relu' if tf.nn.relu == act else 'rand')
             self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero')
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             x = tf.nn.convolution(
                 x, self.kern
                 , padding= padding
@@ -170,13 +179,13 @@ class Multilayer(Record):
         if isinstance(dim, int): dim = dim,
         dim = (m,) + dim
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.layers = tuple(
                 Conv(i, j, act= act, name= "layer{}".format(k)) for k, (j, i) in enumerate(zip(dim, dim[1:]), 1)
             ) + (Conv(n, dim[-1], name= 'layer'),)
 
     def __call__(self, x, name= None):
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             for layer in self.layers: x = layer(x)
             return x
 
@@ -200,14 +209,14 @@ class Attention(Record):
         if d_v is None: d_v = dim
         self.dim = dim
         self.name = name
-        with tf.variable_scope(name):
+        with scope(name):
             self.v = Conv(dim, d_v, name= 'v')
             self.k = Conv(dim, d_v, name= 'k')
             self.q = Conv(dim, d_q, name= 'q')
 
     def __call__(self, query, value, mask= None, name= None, head= 8):
         assert not self.dim % head
-        with tf.variable_scope(name or self.name):
+        with scope(name or self.name):
             v = self.v(value) # bds <- bvs
             k = self.k(value) # bds <- bvs
             q = self.q(query) # bdt <- bqt

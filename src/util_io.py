@@ -1,16 +1,5 @@
 from os.path import expanduser, join
-from util import Record
 import pickle
-
-
-path = Record(
-    log = "~/cache/tensorboard-logdir/eti"
-    # , raw = "~/data/wmt/de-en"
-    , raw = "../data"
-    , pred = "../trial/pred"
-    , ckpt = "../trial/ckpt"
-    , data = "../trial/data"
-)
 
 
 def pform(path, *names, sep= ''):
