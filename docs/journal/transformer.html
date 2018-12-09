@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2018-11-25 Sun 22:27 -->
+<!-- 2018-12-09 Sun 23:45 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>transformer</title>
@@ -256,23 +256,218 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org8872a01">1. attention</a></li>
-<li><a href="#org79fabc9">2. masking current step in self-attention</a></li>
-<li><a href="#orgca26ba8">3. convolutional attention</a></li>
-<li><a href="#orgf5f6738">4. convolution with attention</a></li>
-<li><a href="#org715a1e9">5. complexity</a>
+<li><a href="#org0b8e09b">1. preprocessing</a></li>
+<li><a href="#org01f1519">2. initialization</a></li>
+<li><a href="#org0d87971">3. attention</a></li>
+<li><a href="#org6756a84">4. masking current step in self-attention</a></li>
+<li><a href="#orgc218258">5. convolutional attention</a></li>
+<li><a href="#orgc908c32">6. convolution with attention</a></li>
+<li><a href="#orgc77ffcf">7. complexity</a>
 <ul>
-<li><a href="#orgaaaae38">5.1. original transformer self-attention layer</a></li>
-<li><a href="#org9578e15">5.2. bottleneck convolutional layer</a></li>
+<li><a href="#org1af1cef">7.1. original transformer self-attention layer</a></li>
+<li><a href="#org18468bb">7.2. bottleneck convolutional layer</a></li>
 </ul>
 </li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-org8872a01" class="outline-2">
-<h2 id="org8872a01"><span class="section-number-2">1</span> attention</h2>
+<div id="outline-container-org0b8e09b" class="outline-2">
+<h2 id="org0b8e09b"><span class="section-number-2">1</span> preprocessing</h2>
 <div class="outline-text-2" id="text-1">
+<p>
+<a href="https://github.com/google/sentencepiece">sentencepiece</a> supports <b>bpe</b> (<a href="https://www.aclweb.org/anthology/P16-1162">sennrich et al.</a>) and <b>unigram</b> (<a href="https://arxiv.org/abs/1804.10959">kudo</a>) segmentations.
+the latter supports non-deterministically sampled segmentations.
+</p>
+
+<p>
+with the same vocabulary size, <b>unigram</b> produces shorter sequences than <b>bpe</b>, and performs slightly better.
+</p>
+
+<p>
+training with sampled segmentations takes much longer to reach the same results.
+eventually it should produce a better model, according to kudo.
+however it does require tuning two hyperparameters, the smoothing rate and the sampling size.
+for now i use only deterministic segmentations for training.
+</p>
+
+<p>
+bleu scores with two layered transformer (<code>smsm-samsam</code> architecture).
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">steps</th>
+<th scope="col" class="org-right">100k</th>
+<th scope="col" class="org-right">200k</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">sampled</td>
+<td class="org-right">21.7</td>
+<td class="org-right">23.8</td>
+</tr>
+
+<tr>
+<td class="org-left">unigram</td>
+<td class="org-right">32.7</td>
+<td class="org-right">33.5</td>
+</tr>
+
+<tr>
+<td class="org-left">bpe</td>
+<td class="org-right">32.8</td>
+<td class="org-right">33.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-org01f1519" class="outline-2">
+<h2 id="org01f1519"><span class="section-number-2">2</span> initialization</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+by default tensorflow uses <b>glorot</b> initialization (<a href="http://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf">glorot &amp; bengio</a>),
+and it's common to use <b>he</b> initialization (<a href="https://arxiv.org/abs/1502.01852">he et al.</a>) on layers with relu activation.
+both are special cases of variance scaling.
+with uniform initialization,
+<b>glorot</b> sets the bound by \(\sqrt{3/n}\) and <b>he</b> by \(\sqrt{6/n}\),
+where \(n\) is either \(\texttt{fan_in}\) (the input dimension),
+\(\texttt{fan_out}\) (the output dimension),
+or \(\texttt{fan_avg}\) (the average of the two).
+the doubled scaling factor in <b>he</b> can be understood from the sparse nature of relu.
+</p>
+
+<p>
+using \(\texttt{fan_in}\) preserves the variance during the forward propogation,
+and \(\texttt{fan_out}\) preserves the variance during the backward propogation.
+either one is sufficient condition for the model to converge.
+\(\texttt{fan_avg}\) makes a trade-off between the two,
+which i cannot make sense of.
+usually <b>glorot</b> is used with \(\texttt{fan_avg}\) while <b>he</b> with \(\texttt{fan_in}\),
+due to the suggestions of the authors.
+however \(\texttt{fan_out}\) makes more sense.
+consider a linear transformation \(\mathbb{R}^{p+q} \to \mathbb{R}^{r}\),
+it can be factored into \(\mathbb{R}^{p} \to \mathbb{R}^{r}\) and \(\mathbb{R}^{q} \to \mathbb{R}^{r}\)
+followed by vector addition.
+only with \(\texttt{fan_out}\) that these two equivalent designed would be initialized similarly.
+</p>
+
+<p>
+layer normalization makes initialization less important.
+these variations result in little difference.
+however input-output embedding sharing (<a href="https://arxiv.org/abs/1608.05859">press &amp; wolf</a>) and sinusoidal position encoding used in the transformer
+introduces some complications.
+since the sinusoidal encoding produces values in range \((-1,1)\),
+the values in the input embedding cannot be too small.
+however if they are on the same scale as the sinusoids,
+the values in the ouput embedding would be too large for a logit layer,
+since softmax activation will exponentiate those logits.
+in the transformer, the shared matrix is initialized as usual with <b>glorot</b>,
+but scaled up by \(\sqrt{d}\) when used as the input embedding,
+where \(d\) is the model dimension.
+this scaling seems reasonable by the same reasoning for scaled dot-product attention.
+however when we consider how it interplays with the initialization scheme,
+it is in fact an ad hoc remedy and can be too aggressive in extreme cases.
+consider a character-level model with \(256\) characters and \(512\) model dimension,
+the output embedding would be initialized with bound \(0.0884 \approx \sqrt{3 / ((512 + 256) / 2)}\),
+which after up-scaling by \(\sqrt{512} \approx 22.63\)
+results in an input embedding uniformly initialized with bound \(2.0\).
+</p>
+
+<p>
+when the weights are initialized by \(\texttt{fan_out}\),
+the scale of the input and output embeddings can be gracefully translated with
+\(\sqrt{\texttt{fan_out}/\texttt{fan_in}}\)
+since \(\sqrt{3/\texttt{fan_out}} \times \sqrt{\texttt{fan_out}/\texttt{fan_in}} = \sqrt{3/\texttt{fan_in}}\).
+but the scale is still no match for the sinusoids.
+to fix that, the sinusoids are scaled down by \(\sqrt{d}\).
+since the input embedding is essentially initialized with bound \(\sqrt{3/d}\),
+this method consistently down-scales both the sinusoids and the input embedding by \(\sqrt{d}\),
+and prevents extreme cases of aggressive scaling mentioned above.
+</p>
+
+<p>
+stats of 2 models with <code>c4sm-samsam</code> architecture,
+with vocabulary size \(8192\) and model dimension \(512\),
+both having embedding sharing.
+<b>old</b> uses the original initialization scheme, with \(\texttt{fan_avg}\) and up-scaled input embedding;
+<b>new</b> uses \(\texttt{fan_out}\) and down-scaled sinusoids.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">scale</th>
+<th scope="col" class="org-right">old</th>
+<th scope="col" class="org-right">new</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">sinusoid</td>
+<td class="org-right">1.0000</td>
+<td class="org-right">0.0442</td>
+</tr>
+
+<tr>
+<td class="org-left">input embedding</td>
+<td class="org-right">0.5941</td>
+<td class="org-right">0.0765</td>
+</tr>
+
+<tr>
+<td class="org-left">output embedding</td>
+<td class="org-right">0.0263</td>
+<td class="org-right">0.0191</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">bleu at 100k</td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.0</td>
+</tr>
+
+<tr>
+<td class="org-left">bleu at 200k</td>
+<td class="org-right">33.8</td>
+<td class="org-right">33.9</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+disabling embedding sharing made the accuracy slightly better and the loss slightly worse
+but no difference to the bleu scores.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org0d87971" class="outline-2">
+<h2 id="org0d87971"><span class="section-number-2">3</span> attention</h2>
+<div class="outline-text-2" id="text-3">
 \begin{align*}
 k , v , q &: \mathbb{N}_{+} &&\textrm{dimensions for key, value, query}\\
 f_{k} &: \mathbb{R}^{v} \to \mathbb{R}^{k} &&\textrm{transformation for key}\\
@@ -288,9 +483,9 @@ f \; w \; x &= (f_{v} \; w)^{T} \; (f_{a} \; (f_{k} \; w) \; (f_{q} \; x)) &&\\
 </div>
 </div>
 
-<div id="outline-container-org79fabc9" class="outline-2">
-<h2 id="org79fabc9"><span class="section-number-2">2</span> masking current step in self-attention</h2>
-<div class="outline-text-2" id="text-2">
+<div id="outline-container-org6756a84" class="outline-2">
+<h2 id="org6756a84"><span class="section-number-2">4</span> masking current step in self-attention</h2>
+<div class="outline-text-2" id="text-4">
 <p>
 the current step almost always gets the highest attention weight,
 but it is not necessary to consider itself since the residual connection will add itself back anyways.
@@ -325,9 +520,9 @@ all three performs similarly, with <code>padnil</code> slightly better (<a href=
 </div>
 </div>
 
-<div id="outline-container-orgca26ba8" class="outline-2">
-<h2 id="orgca26ba8"><span class="section-number-2">3</span> convolutional attention</h2>
-<div class="outline-text-2" id="text-3">
+<div id="outline-container-orgc218258" class="outline-2">
+<h2 id="orgc218258"><span class="section-number-2">5</span> convolutional attention</h2>
+<div class="outline-text-2" id="text-5">
 <p>
 <a href="https://arxiv.org/abs/1810.13320">yang et al.</a> proposed convolutional self-attention.
 the 1d version is basically the restricted attention mentioned by <a href="https://arxiv.org/abs/1706.03762">vaswani et al.</a> in the original transformer paper.
@@ -336,9 +531,9 @@ the 2d version also queries across attention heads, which allows the averaging n
 </div>
 </div>
 
-<div id="outline-container-orgf5f6738" class="outline-2">
-<h2 id="orgf5f6738"><span class="section-number-2">4</span> convolution with attention</h2>
-<div class="outline-text-2" id="text-4">
+<div id="outline-container-orgc908c32" class="outline-2">
+<h2 id="orgc908c32"><span class="section-number-2">6</span> convolution with attention</h2>
+<div class="outline-text-2" id="text-6">
 <p>
 stacking self-attention layers is wasteful.
 all but the layers which connect to data show interesting patterns,
@@ -364,9 +559,9 @@ how to improve the decoder with convolution?
 </div>
 </div>
 
-<div id="outline-container-org715a1e9" class="outline-2">
-<h2 id="org715a1e9"><span class="section-number-2">5</span> complexity</h2>
-<div class="outline-text-2" id="text-5">
+<div id="outline-container-orgc77ffcf" class="outline-2">
+<h2 id="orgc77ffcf"><span class="section-number-2">7</span> complexity</h2>
+<div class="outline-text-2" id="text-7">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -405,9 +600,9 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </p>
 </div>
 
-<div id="outline-container-orgaaaae38" class="outline-3">
-<h3 id="orgaaaae38"><span class="section-number-3">5.1</span> original transformer self-attention layer</h3>
-<div class="outline-text-3" id="text-5-1">
+<div id="outline-container-org1af1cef" class="outline-3">
+<h3 id="org1af1cef"><span class="section-number-3">7.1</span> original transformer self-attention layer</h3>
+<div class="outline-text-3" id="text-7-1">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -485,9 +680,9 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </div>
 </div>
 
-<div id="outline-container-org9578e15" class="outline-3">
-<h3 id="org9578e15"><span class="section-number-3">5.2</span> bottleneck convolutional layer</h3>
-<div class="outline-text-3" id="text-5-2">
+<div id="outline-container-org18468bb" class="outline-3">
+<h3 id="org18468bb"><span class="section-number-3">7.2</span> bottleneck convolutional layer</h3>
+<div class="outline-text-3" id="text-7-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -550,7 +745,7 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: kuan yu</p>
-<p class="date">Created: 2018-11-25 Sun 22:27</p>
+<p class="date">Created: 2018-12-09 Sun 23:45</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
