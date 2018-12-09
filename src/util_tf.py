@@ -140,14 +140,14 @@ class Conv(Record):
 
     """
 
-    def __init__(self, n, m= None, shape= (1,), act= None, name= 'conv'):
+    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, name= 'conv'):
         if m is None: m = n
         self.act = act
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with scope(name):
             self.kern = variable('kern', shape + (m, n), 'relu' if tf.nn.relu == act else 'rand')
-            self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero')
+            self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero') if bias else None
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
         with scope(name or self.name):
