@@ -79,25 +79,6 @@ class DecodeBlock(Record):
             return x
 
 
-class ConvBlock(Record):
-
-    def __init__(self, dim, dim_mid, depth, name):
-        self.name = name
-        with scope(name):
-            self.ante = Conv(dim_mid, dim, shape= (1,), act= None, name= 'ante')
-            self.conv = tuple(Conv(dim_mid, shape= (2,), act= tf.nn.relu, name= "conv{}".format(1+i))
-                              for i in range(depth))
-            self.post = Conv(dim, dim_mid, shape= (1,), act= None, name= 'post')
-            self.norm = Normalize(dim, name= 'norm')
-
-    def __call__(self, x, dropout, name= None):
-        with scope(name or self.name):
-            y = self.ante(x)
-            for conv in self.conv:
-                y = conv(tf.pad(y, ((0,0),(0,0),(1,0))))
-            return self.norm(x + dropout(self.post(y)))
-
-
 class Model(Record):
     """-> Record
 
@@ -115,8 +96,7 @@ class Model(Record):
 
            logit : Embed
           decode : tuple DecodeBlock
-        enc_satt : EncodeBlock
-        enc_conv : tuple ConvBlock
+          encode : tuple EncodeBlock
          emb_tgt : Embed
          emb_src : Embed
 
@@ -125,15 +105,13 @@ class Model(Record):
         emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
         emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
         with scope('encode'):
-            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, "conv{}".format(1+i)) for i in range(4))
-            enc_satt = EncodeBlock(dim_emb, dim_mid, "satt")
+            encode = tuple(EncodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
         with scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
         return Model(
             logit= emb_tgt.transpose(name= 'logit')
             , decode= decode # mark
-            , enc_satt= enc_satt
-            , enc_conv= enc_conv
+            , encode= encode
             , emb_tgt= emb_tgt
             , emb_src= emb_src
             , dim_emb= dim_emb
@@ -191,8 +169,8 @@ class Model(Record):
         dropout = identity
         with scope('emb_src_infer'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('encode_infer'):
-            for conv in self.enc_conv: w = conv(w, dropout)
-            w = self.enc_satt(w, w, self.mask_src, dropout)
+            for enc in self.encode:
+                w = enc(w, w, self.mask_src, dropout)
         with scope('decode_infer'): # mark
             with scope('init'):
                 b,t = tf.shape(w)[0], placeholder(tf.int32, (), self.cap, 't')
@@ -201,23 +179,12 @@ class Model(Record):
                 x = tf.fill((b, 1), self.bos, 'x')
                 p, p_shape = tf.zeros((b, 0),     tf.int32, name= 'p'), tf.TensorShape((None,               None))
                 v, v_shape = tf.zeros((b, self.dim_emb, 1), name= 'v'), tf.TensorShape((None, self.dim_emb, None))
-                # c, c_shape = tf.zeros((b,          128, 1), name= 'c'), tf.TensorShape((None,          128,    1))
             def body(i, x, p, vs):
                 # i : ()                time step from 0 to t
                 # x : (b,          1)   x_i
                 # p : (b,          i)   predictions
                 # v : (b, dim_emb, 1+i) attention values
-                # c : (b,     128, 1)   convolution value
                 with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
-                # j, ds = 0, []
-                # for dec in self.dec_conv:
-                #     with scope(dec.name):
-                #         d = dec.ante(x)
-                #         for conv in dec.conv:
-                #             ds.append(d)
-                #             d = dec.act(conv(tf.concat((cs[j], d), axis= -1)))
-                #             j += 1
-                #         x = dec.norm(x + dropout(dec.post(d)), axis= 1)
                 us = []
                 for v, dec in zip(vs, self.decode):
                     us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
@@ -251,8 +218,8 @@ class Model(Record):
         with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
         with scope('encode_'):
-            for conv in self.enc_conv: w = conv(w, dropout)
-            w = self.enc_satt(w, w, self.mask_src, dropout)
+            for enc in self.encode:
+                w = enc(w, w, self.mask_src, dropout)
         with scope('decode_'): # mark
             for i, dec in enumerate(self.decode):
                 with scope("pad{}".format(1+i)):
