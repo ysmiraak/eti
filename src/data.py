@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from trial import config as C
-from util_io import path as P, pform, load_txt, save_txt
+from trial import config as C, paths as P, train as T
+from util_io import pform, load_txt, save_txt
 from util_np import np, vpack
 from util_sp import spm
 
@@ -51,5 +51,5 @@ for src, tgt in src_tgt:
 save_txt(pform(P.data, "train_src.txt"), train_src)
 save_txt(pform(P.data, "train_tgt.txt"), train_tgt)
 save_txt(pform(P.data, "valid_tgt.txt"), valid_raw)
-np.save(pform(P.data, "valid_tgt.npy"), vpack(valid_tgt, (C.total_valid, C.cap), C.eos, np.uint16))
-np.save(pform(P.data, "valid_src.npy"), vpack(valid_src, (C.total_valid, C.cap), C.eos, np.uint16))
+np.save( pform(P.data, "valid_tgt.npy"), vpack(valid_tgt, (C.total_valid, C.cap), C.eos, np.uint16))
+np.save( pform(P.data, "valid_src.npy"), vpack(valid_src, (C.total_valid, C.cap), C.eos, np.uint16))

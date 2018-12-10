@@ -1,38 +1,42 @@
 from util import Record
 
 
-master = Record(
+config = Record(
     trial  = 'm'
     , ckpt = None
     , seed = 0
-    ### data spec
+    ### data
     , unk = 0
     , eos = 1
     , bos = 2
     , cap = 64
-    ### model spec
+    ### model
     , dim_src = 8192
     , dim_tgt = 8192
     , dim_emb = 512
-    , dim_mid = 1024
+    , dim_mid = 2048
     , depth   = 2
-    ### regularization
-    , dropout = 0.1
-    , smooth  = 0.1
-    ### adam optimizer
-    , warmup  = 4e3
-    , beta1   = 0.9
-    , beta2   = 0.98
-    , epsilon = 1e-9
-    ### training schedule
+    ### batch
     , batch_train = 64
-    , batch_valid = 512
+    , batch_valid = 256
     , total_valid = 4096
 )
 
 
-wide = Record(master, dim_mid= 2048)
-deep = Record(master, depth= 4)
+paths = Record(
+    log = "~/cache/tensorboard-logdir/eti"
+    , raw = "../data"
+    , pred = "../trial/pred"
+    , ckpt = "../trial/ckpt"
+    , data = "../trial/data"
+)
 
 
-config = Record(master, trial= 'v', ckpt= None)
+train = Record(
+      dropout = 0.1
+    , smooth  = 0.1
+    , warmup  = 4e3
+    , beta1   = 0.9
+    , beta2   = 0.98
+    , epsilon = 1e-9
+)

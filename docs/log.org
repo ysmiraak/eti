@@ -4,7 +4,7 @@
 |----+-----------+------------------------------------------------------|
 | a  | autoreg   | encoder-decoder, autoregressive                      |
 | s  | straight  | straight seq2seq                                     |
-| v  | master    | encoder-decoder, nonautoregressive                   |
+| v  | nonauto   | encoder-decoder, nonautoregressive                   |
 |    |           |                                                      |
 | i  | iterative | iterated decoder                                     |
 |    |           |                                                      |
