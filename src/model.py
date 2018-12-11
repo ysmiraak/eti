@@ -81,21 +81,22 @@ class DecodeBlock(Record):
 
 class ConvBlock(Record):
 
-    def __init__(self, dim, dim_mid, depth, name):
+    def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.ante = Conv(dim_mid, dim, shape= (1,), act= None, name= 'ante')
-            self.conv = tuple(Conv(dim_mid, shape= (2,), act= tf.nn.relu, name= "conv{}".format(1+i))
-                              for i in range(depth))
-            self.post = Conv(dim, dim_mid, shape= (1,), act= None, name= 'post')
+            self.ante = Conv(128, dim, shape= (1,), act=       None, name= 'ante')
+            self.cnn1 = Conv(128, 128, shape= (2,), act= tf.nn.relu, name= 'cnn1')
+            self.cnn2 = Conv(128, 128, shape= (2,), act= tf.nn.relu, name= 'cnn2')
+            self.post = Conv(dim, 128, shape= (1,), act=       None, name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
             y = self.ante(x)
-            for conv in self.conv:
-                y = conv(tf.pad(y, ((0,0),(0,0),(1,0))))
-            return self.norm(x + dropout(self.post(y)))
+            y = self.cnn1(tf.pad(y, ((0,0),(0,0),(1,0))))
+            y = self.cnn2(tf.pad(y, ((0,0),(0,0),(1,0))))
+            y = self.post(y)
+            return self.norm(x + dropout(y))
 
 
 class Model(Record):
@@ -125,7 +126,7 @@ class Model(Record):
         emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
         emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
         with scope('encode'):
-            enc_conv = tuple(ConvBlock(dim_emb, 128, 2, "conv{}".format(1+i)) for i in range(4))
+            enc_conv = tuple(ConvBlock(dim_emb, "conv{}".format(1+i)) for i in range(4))
             enc_satt = EncodeBlock(dim_emb, dim_mid, "satt")
         with scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
