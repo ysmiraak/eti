@@ -246,7 +246,7 @@ class Model(Record):
             prob : f32 (b, t, dim_tgt) prediction, soft
             pred : i32 (b, t)          prediction, hard
             loss : f32 ()              prediction loss
-            accr : f32 ()              accuracy
+            errt : f32 ()              error rate
 
         """
         with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
@@ -262,12 +262,12 @@ class Model(Record):
         y = self.logit(x, name= 'logit_')
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
-        with scope('accr_'): accr = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
+        with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.gold, pred)))
         with scope('loss_'): loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
                 if smooth else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
-        return Model(self, output= y, prob= prob, pred= pred, loss= loss, accr= accr)
+        return Model(self, output= y, prob= prob, pred= pred, loss= loss, errt= errt)
 
     def train(self, dropout= 0.1, smooth= 0.1, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
         """-> Model with new fields, teacher forcing
