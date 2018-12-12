@@ -81,22 +81,22 @@ class DecodeBlock(Record):
 
 class ConvBlock(Record):
 
-    def __init__(self, dim, name):
+    def __init__(self, dim, name, mid= 128, depth= 4):
         self.name = name
         with scope(name):
-            self.ante = Conv(128, dim, shape= (1,), act=       None, name= 'ante')
-            self.cnn1 = Conv(128, 128, shape= (2,), act= tf.nn.relu, name= 'cnn1')
-            self.cnn2 = Conv(128, 128, shape= (2,), act= tf.nn.relu, name= 'cnn2')
-            self.post = Conv(dim, 128, shape= (1,), act=       None, name= 'post')
+            self.ante =       Conv(mid, dim, shape= (1,), name= 'ante')
+            self.gate = tuple(Conv(mid, mid, shape= (2,), name= "gate{}".format(1+i), bias= True) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, shape= (2,), name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, shape= (1,), name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
             y = self.ante(x)
-            y = self.cnn1(tf.pad(y, ((0,0),(0,0),(1,0))))
-            y = self.cnn2(tf.pad(y, ((0,0),(0,0),(1,0))))
-            y = self.post(y)
-            return self.norm(x + dropout(y))
+            for gate, conv in zip(self.gate, self.conv):
+                y = tf.pad(y, ((0,0),(0,0),(1,0)))
+                y = tf.sigmoid(gate(y)) * conv(y)
+            return self.norm(x + dropout(self.post(y)))
 
 
 class Model(Record):
@@ -126,7 +126,7 @@ class Model(Record):
         emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
         emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
         with scope('encode'):
-            enc_conv = tuple(ConvBlock(dim_emb, "conv{}".format(1+i)) for i in range(4))
+            enc_conv = ConvBlock(dim_emb, 'conv')
             enc_satt = EncodeBlock(dim_emb, dim_mid, "satt")
         with scope('decode'): # mark
             decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
@@ -192,7 +192,7 @@ class Model(Record):
         dropout = identity
         with scope('emb_src_infer'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('encode_infer'):
-            for conv in self.enc_conv: w = conv(w, dropout)
+            w = self.enc_conv(w, dropout)
             w = self.enc_satt(w, w, self.mask_src, dropout)
         with scope('decode_infer'): # mark
             with scope('init'):
@@ -252,7 +252,7 @@ class Model(Record):
         with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
         with scope('encode_'):
-            for conv in self.enc_conv: w = conv(w, dropout)
+            w = self.enc_conv(w, dropout)
             w = self.enc_satt(w, w, self.mask_src, dropout)
         with scope('decode_'): # mark
             for i, dec in enumerate(self.decode):
