@@ -154,11 +154,11 @@ class Decode(Record):
             for block in self.blocks:
                 btype = block.name[0]
                 if 'c' == btype:
-                    c, i = cs[i], i + 1
                     with scope(block.name):
                         d = block.ante(x)
                         for gate, conv in zip(block.gate, block.conv):
                             ds.append(d)
+                            c, i = cs[i], i + 1
                             d = tf.concat((c, d), axis= -1, name= 'cache_c')
                             d = tf.sigmoid(gate(d)) * conv(d)
                         x = block.norm(x + dropout(block.post(d)))
