@@ -119,14 +119,14 @@ class Embed(Record):
             if x.dtype.is_integer:
                 return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
             else:
-                m , n = map(int, self.kern.shape)
+                m , n = self.kern.shape.as_list()
                 shape = tf.shape(x)
                 b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
                 assert m == d
                 return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, m)) @ self.kern, (b, t, n))
 
     def transpose(self, name= None):
-        m, n = map(int, self.kern.shape)
+        m, n = self.kern.shape.as_list()
         self = copy(self)
         self.name = name or self.name
         with scope(self.name): self.kern = tf.transpose(self.kern) * ((n / m) ** 0.5)
