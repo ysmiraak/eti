@@ -99,6 +99,7 @@ class Encode(Record):
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
                 elif 's' == btype: x = block(x, x, m, dropout)
+                elif 'm' == btype: x = block(x, dropout)
                 else: raise TypeError('unknown encode block')
             return x
 
