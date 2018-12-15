@@ -2,7 +2,7 @@ from util import Record
 
 
 config = Record(
-    trial  = 'c3sc2sc-samsam_'
+    trial  = 'smsm-samsam_'
     , ckpt = None
     , seed = 0
     ### data

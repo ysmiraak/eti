@@ -88,14 +88,10 @@ class Encode(Record):
     def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.blocks = GluBlock(dim, 'c1') \
-                ,         GluBlock(dim, 'c2') \
-                ,         GluBlock(dim, 'c3') \
-                ,         AttBlock(dim, 's1') \
-                ,         GluBlock(dim, 'c4') \
-                ,         GluBlock(dim, 'c5') \
+            self.blocks = AttBlock(dim, 's1') \
+                ,         MlpBlock(dim, 'm1') \
                 ,         AttBlock(dim, 's2') \
-                ,         GluBlock(dim, 'c6')
+                ,         MlpBlock(dim, 'm2')
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):

@@ -196,7 +196,7 @@ class Attention(Record):
     query : tensor f32 (b, d_q, t)
     value : tensor f32 (b, d_v, s)
      mask : tensor f32 (b,   t, s)
-         -> tensor f32 (b, dim, t)
+         -> tensor f32 (b, d_q, t)
 
     `dim` must be divisible by `head`
 
@@ -213,6 +213,7 @@ class Attention(Record):
             self.v = Conv(dim, d_v, name= 'v')
             self.k = Conv(dim, d_v, name= 'k')
             self.q = Conv(dim, d_q, name= 'q')
+            self.p = Conv(d_q, dim, name= 'p')
 
     def __call__(self, query, value, mask= None, name= None, head= 8):
         assert not self.dim % head
@@ -230,4 +231,4 @@ class Attention(Record):
             a = tf.nn.softmax(a, axis= -1)
             y = tf.matmul(v, a, transpose_b= True) # hbct <- hbcs @ (hbst <- hbts)
             if 1 < head: y = tf.concat(tf.unstack(y), axis= 1) # bdt <- hbct
-            return y
+            return self.p(y)
