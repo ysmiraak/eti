@@ -40,8 +40,8 @@ def placeholder(dtype, shape, x= None, name= None):
 def variable(name, shape, init, initializers=
              {  'zero': tf.initializers.zeros()
               , 'unit': tf.initializers.ones()
-              , 'rand': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
-              , 'relu': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
+              , 'vso1': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
+              , 'vso2': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
              }):
     """wraps `tf.get_variable` to provide initializer based on usage"""
     return tf.get_variable(name, shape, initializer= initializers.get(init, init))
@@ -112,7 +112,7 @@ class Embed(Record):
 
     def __init__(self, n, m, name= 'embed'):
         self.name = name
-        with scope(name): self.kern = variable('kern', (m, n), 'rand')
+        with scope(name): self.kern = variable('kern', (m, n), 'vso1')
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
@@ -140,13 +140,13 @@ class Conv(Record):
 
     """
 
-    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, name= 'conv'):
+    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, init= None, name= 'conv'):
         if m is None: m = n
         self.act = act
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with scope(name):
-            self.kern = variable('kern', shape + (m, n), 'relu' if tf.nn.relu == act else 'rand')
+            self.kern = variable('kern', shape + (m, n), init or 'vso2' if tf.nn.relu == act else 'vso1')
             self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero') if bias else None
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):

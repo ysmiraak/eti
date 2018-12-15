@@ -55,10 +55,10 @@ class GluBlock(Record):
     def __init__(self, dim, name, mid= 128, depth= 2):
         self.name = name
         with scope(name):
-            self.ante =       Conv(mid, dim, shape= (1,), name= 'ante')
-            self.gate = tuple(Conv(mid, mid, shape= (2,), name= "gate{}".format(1+i)) for i in range(depth))
-            self.conv = tuple(Conv(mid, mid, shape= (2,), name= "conv{}".format(1+i)) for i in range(depth))
-            self.post =       Conv(dim, mid, shape= (1,), name= 'post')
+            self.ante =       Conv(mid, dim, shape= (1,), init= 'vso1', name= 'ante')
+            self.gate = tuple(Conv(mid, mid, shape= (2,), init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, shape= (2,), init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, shape= (1,), init= 'vso1', name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
