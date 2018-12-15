@@ -55,7 +55,7 @@ infer = modat.infer()
 # with tf.Session() as sess:
 #     tf.global_variables_initializer().run()
 #     with tf.summary.FileWriter(pform(P.log, C.trial), sess.graph) as wtr:
-#         profile(sess, wtr, (infer.pred, valid.accr), feed_dict= {m.src_: src, m.tgt_: tgt})
+#         profile(sess, wtr, (infer.pred, valid.errt), feed_dict= {m.src_: src, m.tgt_: tgt})
 
 train = model.data(*pipe(batch, (tf.int32, tf.int32), prefetch= 16)).train(**T)
 
@@ -73,15 +73,15 @@ else:
 def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
              ( tf.summary.scalar('step_loss', valid.loss)
-             , tf.summary.scalar('step_accr', valid.accr)))):
-    loss, accr = map(np.mean, zip(*batch_run(
+             , tf.summary.scalar('step_errt', valid.errt)))):
+    loss, errt = map(np.mean, zip(*batch_run(
         sess= sess
         , model= valid
-        , fetch= (valid.loss, valid.accr)
+        , fetch= (valid.loss, valid.errt)
         , src= src_valid
         , tgt= tgt_valid
         , batch= C.batch_valid)))
-    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.accr: accr}), step)
+    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.errt: errt}), step)
     wtr.flush()
 
 def trans(sents, model= infer):

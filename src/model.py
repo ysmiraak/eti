@@ -37,46 +37,135 @@ class Sinusoid(Record):
             return sinusoid(self.dim, time) if self.pos is None else self.pos[:,:time]
 
 
-class EncodeBlock(Record):
+class AttBlock(Record):
 
-    def __init__(self, dim, dim_mid, name):
+    def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            with scope('att'):
-                self.att = Attention(dim)
-                self.norm_att = Normalize(dim)
-            with scope('mlp'):
-                self.mlp = Multilayer(dim, dim, dim_mid)
-                self.norm_mlp = Normalize(dim)
+            self.att  = Attention(dim)
+            self.norm = Normalize(dim)
 
     def __call__(self, x, v, m, dropout, name= None):
         with scope(name or self.name):
-            with scope('att'): x = self.norm_att(x + dropout(self.att(x, v, m)))
-            with scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
-            return x
+            return self.norm(x + dropout(self.att(x, v, m)))
 
 
-class DecodeBlock(Record):
+class GluBlock(Record):
 
-    def __init__(self, dim, dim_mid, name):
+    def __init__(self, dim, name, mid= 128, depth= 2):
         self.name = name
         with scope(name):
-            with scope('csl'):
-                self.csl = Attention(dim)
-                self.norm_csl = Normalize(dim)
-            with scope('att'):
-                self.att = Attention(dim)
-                self.norm_att = Normalize(dim)
-            with scope('mlp'):
-                self.mlp = Multilayer(dim, dim, dim_mid)
-                self.norm_mlp = Normalize(dim)
+            self.ante =       Conv(mid, dim, shape= (1,), init= 'vso1', name= 'ante')
+            self.gate = tuple(Conv(mid, mid, shape= (2,), init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, shape= (2,), init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, shape= (1,), init= 'vso1', name= 'post')
+            self.norm = Normalize(dim, name= 'norm')
 
-    def __call__(self, x, v, m, w, n, dropout, name= None):
+    def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
-            with scope('csl'): x = self.norm_csl(x + dropout(self.csl(x, v, m)))
-            with scope('att'): x = self.norm_att(x + dropout(self.att(x, w, n)))
-            with scope('mlp'): x = self.norm_mlp(x + dropout(self.mlp(x)))
+            y = self.ante(x)
+            for gate, conv in zip(self.gate, self.conv):
+                y = tf.pad(y, ((0,0),(0,0),(1,0)))
+                y = tf.sigmoid(gate(y)) * conv(y)
+            return self.norm(x + dropout(self.post(y)))
+
+
+class MlpBlock(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.mlp = Multilayer(dim, dim, 2048)
+            self.norm = Normalize(dim)
+
+    def __call__(self, x, dropout, name= None):
+        with scope(name or self.name):
+            return self.norm(x + dropout(self.mlp(x)))
+
+
+class Encode(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.blocks = AttBlock(dim, 's1') \
+                ,         MlpBlock(dim, 'm1') \
+                ,         AttBlock(dim, 's2') \
+                ,         MlpBlock(dim, 'm2')
+
+    def __call__(self, x, m, dropout, name= None):
+        with scope(name or self.name):
+            for block in self.blocks:
+                btype = block.name[0]
+                if   'c' == btype: x = block(x, dropout)
+                elif 's' == btype: x = block(x, x, m, dropout)
+                else: raise TypeError('unknown encode block')
             return x
+
+
+class Decode(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.blocks = AttBlock(dim, 's1') \
+                ,         AttBlock(dim, 'a1') \
+                ,         MlpBlock(dim, 'm1') \
+                ,         AttBlock(dim, 's2') \
+                ,         AttBlock(dim, 'a2') \
+                ,         MlpBlock(dim, 'm2')
+
+    def __call__(self, x, m, w, n, dropout, name= None):
+        with scope(name or self.name):
+            for block in self.blocks:
+                btype = block.name[0]
+                if   'c' == btype: x = block(x, dropout)
+                elif 's' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, dropout)
+                elif 'a' == btype: x = block(x, w, n, dropout)
+                elif 'm' == btype: x = block(x, dropout)
+                else: raise TypeError('unknown decode block')
+            return x
+
+    def cache_init(self, b, d):
+        sn2cs, cs, cs_shape, j = {}, [], [], 0
+        for block in self.blocks:
+            btype = block.name[0]
+            if 'c' == btype:
+                for conv in block.conv:
+                    s, n, _ = conv.kern.shape.as_list()
+                    try:
+                        c, c_shape = sn2cs[(s, n)]
+                    except KeyError:
+                        c, c_shape = tf.zeros((b, n, s-1), name= 'c'), tf.TensorShape((None, n, s-1))
+                        sn2cs[(s, d)] = c, c_shape
+                    cs.append(c)
+                    cs_shape.append(c_shape)
+            elif 's' == btype: j += 1
+            else: pass
+        return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 1), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
+
+    def autoreg(self, x, cs, vs, w, n, dropout, name= None):
+        with scope(name or self.name):
+            i, ds, j, us = 0, [], 0, []
+            for block in self.blocks:
+                btype = block.name[0]
+                if 'c' == btype:
+                    with scope(block.name):
+                        d = block.ante(x)
+                        for gate, conv in zip(block.gate, block.conv):
+                            ds.append(d)
+                            c, i = cs[i], i + 1
+                            d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                            d = tf.sigmoid(gate(d)) * conv(d)
+                        x = block.norm(x + dropout(block.post(d)))
+                elif 's' == btype:
+                    v, j = vs[j], j + 1
+                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    x = block(x, v, None, dropout)
+                elif 'a' == btype: x = block(x, w, n, dropout)
+                elif 'm' == btype: x = block(x, dropout)
+                else: raise TypeError('unknown decode block')
+            return x, tuple(ds), tuple(us)
 
 
 class Model(Record):
@@ -95,8 +184,8 @@ class Model(Record):
         """-> Model with fields
 
            logit : Embed
-          decode : tuple DecodeBlock
-          encode : tuple EncodeBlock
+          decode : Decode
+          encode : Encode
          emb_tgt : Embed
          emb_src : Embed
 
@@ -104,14 +193,10 @@ class Model(Record):
         assert not dim_emb % 2
         emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
         emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
-        with scope('encode'):
-            encode = tuple(EncodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
-        with scope('decode'): # mark
-            decode = tuple(DecodeBlock(dim_emb, dim_mid, "layer{}".format(1+i)) for i in range(2))
         return Model(
             logit= emb_tgt.transpose(name= 'logit')
-            , decode= decode # mark
-            , encode= encode
+            , decode= Decode(dim_emb, name= 'decode')
+            , encode= Encode(dim_emb, name= 'encode')
             , emb_tgt= emb_tgt
             , emb_src= emb_src
             , dim_emb= dim_emb
@@ -168,38 +253,34 @@ class Model(Record):
         """
         dropout = identity
         with scope('emb_src_infer'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
-        with scope('encode_infer'):
-            for enc in self.encode:
-                w = enc(w, w, self.mask_src, dropout)
-        with scope('decode_infer'): # mark
+        w = self.encode(w, self.mask_src, dropout, name= 'encode_infer')
+        with scope('decode_infer'):
             with scope('init'):
                 b,t = tf.shape(w)[0], placeholder(tf.int32, (), self.cap, 't')
                 pos = self.position(t)
                 i = tf.constant(0)
                 x = tf.fill((b, 1), self.bos, 'x')
-                p, p_shape = tf.zeros((b, 0),     tf.int32, name= 'p'), tf.TensorShape((None,               None))
-                v, v_shape = tf.zeros((b, self.dim_emb, 1), name= 'v'), tf.TensorShape((None, self.dim_emb, None))
-            def body(i, x, p, vs):
+                p, p_shape = x[:,1:], tf.TensorShape((None, None))
+                cs, cs_shape, vs, vs_shape = self.decode.cache_init(b, self.dim_emb)
+            def body(i, x, p, cs, vs):
                 # i : ()                time step from 0 to t
                 # x : (b,          1)   x_i
                 # p : (b,          i)   predictions
+                # c : (b,     128, 1)   convolution value
                 # v : (b, dim_emb, 1+i) attention values
                 with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
-                us = []
-                for v, dec in zip(vs, self.decode):
-                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
-                    x = dec(x, v, None, w, self.mask_arr, dropout)
+                x, cs, vs = self.decode.autoreg(x, cs, vs, w, self.mask_arr, dropout)
                 x = self.logit(x)
                 x = tf.argmax(x, axis= -1, output_type= tf.int32, name= 'pred')
                 p = tf.concat((p, x), axis= -1, name= 'cache_p')
-                return i + 1, x, p, tuple(us)
+                return i + 1, x, p, cs, vs
             def cond(i, x, *_):
                 with scope('cond'):
                     return ((i < t) & ~ tf.reduce_all(tf.equal(x, self.eos))) if minimal else (i < t)
             _, _, p, *_ = tf.while_loop(
                 cond, body
-                , (i      , x      , p      , (v      ,)*2)
-                , (i.shape, x.shape, p_shape, (v_shape,)*2)
+                , (i      , x      , p      , cs      , vs      )
+                , (i.shape, x.shape, p_shape, cs_shape, vs_shape)
                 , back_prop= False
                 , swap_memory= True
                 , name= 'autoreg')
@@ -212,28 +293,22 @@ class Model(Record):
             prob : f32 (b, t, dim_tgt) prediction, soft
             pred : i32 (b, t)          prediction, hard
             loss : f32 ()              prediction loss
-            accr : f32 ()              accuracy
+            errt : f32 ()              error rate
 
         """
         with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
-        with scope('encode_'):
-            for enc in self.encode:
-                w = enc(w, w, self.mask_src, dropout)
-        with scope('decode_'): # mark
-            for i, dec in enumerate(self.decode):
-                with scope("pad{}".format(1+i)):
-                    v = tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0)))
-                x = dec(x, v, self.mask_tgt, w, self.mask_arr, dropout)
+        w = self.encode(w, self.mask_src,                   dropout, name= 'encode_')
+        x = self.decode(x, self.mask_tgt, w, self.mask_arr, dropout, name= 'decode_')
         y = self.logit(x, name= 'logit_')
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
-        with scope('accr_'): accr = tf.reduce_mean(tf.to_float(tf.equal(self.gold, pred)))
+        with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.gold, pred)))
         with scope('loss_'): loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
                 if smooth else
                 tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
-        return Model(self, output= y, prob= prob, pred= pred, loss= loss, accr= accr)
+        return Model(self, output= y, prob= prob, pred= pred, loss= loss, errt= errt)
 
     def train(self, dropout= 0.1, smooth= 0.1, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
         """-> Model with new fields, teacher forcing

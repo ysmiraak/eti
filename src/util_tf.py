@@ -40,8 +40,8 @@ def placeholder(dtype, shape, x= None, name= None):
 def variable(name, shape, init, initializers=
              {  'zero': tf.initializers.zeros()
               , 'unit': tf.initializers.ones()
-              , 'rand': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
-              , 'relu': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
+              , 'vso1': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
+              , 'vso2': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
              }):
     """wraps `tf.get_variable` to provide initializer based on usage"""
     return tf.get_variable(name, shape, initializer= initializers.get(init, init))
@@ -112,21 +112,21 @@ class Embed(Record):
 
     def __init__(self, n, m, name= 'embed'):
         self.name = name
-        with scope(name): self.kern = variable('kern', (m, n), 'rand')
+        with scope(name): self.kern = variable('kern', (m, n), 'vso1')
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
             if x.dtype.is_integer:
                 return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
             else:
-                m , n = map(int, self.kern.shape)
+                m , n = self.kern.shape.as_list()
                 shape = tf.shape(x)
                 b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
                 assert m == d
                 return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, m)) @ self.kern, (b, t, n))
 
     def transpose(self, name= None):
-        m, n = map(int, self.kern.shape)
+        m, n = self.kern.shape.as_list()
         self = copy(self)
         self.name = name or self.name
         with scope(self.name): self.kern = tf.transpose(self.kern) * ((n / m) ** 0.5)
@@ -140,13 +140,13 @@ class Conv(Record):
 
     """
 
-    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, name= 'conv'):
+    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, init= None, name= 'conv'):
         if m is None: m = n
         self.act = act
         self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with scope(name):
-            self.kern = variable('kern', shape + (m, n), 'relu' if tf.nn.relu == act else 'rand')
+            self.kern = variable('kern', shape + (m, n), init or 'vso2' if tf.nn.relu == act else 'vso1')
             self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero') if bias else None
 
     def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
@@ -196,7 +196,7 @@ class Attention(Record):
     query : tensor f32 (b, d_q, t)
     value : tensor f32 (b, d_v, s)
      mask : tensor f32 (b,   t, s)
-         -> tensor f32 (b, dim, t)
+         -> tensor f32 (b, d_q, t)
 
     `dim` must be divisible by `head`
 
@@ -213,6 +213,7 @@ class Attention(Record):
             self.v = Conv(dim, d_v, name= 'v')
             self.k = Conv(dim, d_v, name= 'k')
             self.q = Conv(dim, d_q, name= 'q')
+            self.p = Conv(d_q, dim, name= 'p')
 
     def __call__(self, query, value, mask= None, name= None, head= 8):
         assert not self.dim % head
@@ -230,4 +231,4 @@ class Attention(Record):
             a = tf.nn.softmax(a, axis= -1)
             y = tf.matmul(v, a, transpose_b= True) # hbct <- hbcs @ (hbst <- hbts)
             if 1 < head: y = tf.concat(tf.unstack(y), axis= 1) # bdt <- hbct
-            return y
+            return self.p(y)
