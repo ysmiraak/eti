@@ -50,6 +50,20 @@ class AttBlock(Record):
             return self.norm(x + dropout(self.att(x, v, m)))
 
 
+class BiattBlock(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.latt  = Attention(dim, name= 'latt')
+            self.ratt  = Attention(dim, name= 'ratt')
+            self.norm = Normalize(dim)
+
+    def __call__(self, x, v, m, w, n, dropout, name= None):
+        with scope(name or self.name):
+            return self.norm(tf.add_n(((dropout(self.latt(x, v, m)), x, dropout(self.ratt(x, w, n))))))
+
+
 class GluBlock(Record):
 
     def __init__(self, dim, name, mid= 128, depth= 2):
@@ -106,6 +120,7 @@ class Encode(Record):
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
                 elif 's' == btype: x = block(x, x, m, dropout)
+                elif 'm' == btype: x = block(x, dropout)
                 else: raise TypeError('unknown encode block')
             return x
 
@@ -147,6 +162,7 @@ class Decode(Record):
                         sn2cs[(s, d)] = c, c_shape
                     cs.append(c)
                     cs_shape.append(c_shape)
+            elif 'b' == btype: j += 1
             elif 's' == btype: j += 1
             else: pass
         return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 1), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
@@ -165,6 +181,10 @@ class Decode(Record):
                             d = tf.concat((c, d), axis= -1, name= 'cache_c')
                             d = tf.sigmoid(gate(d)) * conv(d)
                         x = block.norm(x + dropout(block.post(d)))
+                elif 'b' == btype:
+                    v, j = vs[j], j + 1
+                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    x = block(x, v, None, w, n, dropout)
                 elif 's' == btype:
                     v, j = vs[j], j + 1
                     us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
