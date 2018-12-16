@@ -142,6 +142,7 @@ class Decode(Record):
             for block in self.blocks:
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
+                elif 'b' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, w, n, dropout)
                 elif 's' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, dropout)
                 elif 'a' == btype: x = block(x, w, n, dropout)
                 elif 'm' == btype: x = block(x, dropout)
