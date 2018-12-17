@@ -131,6 +131,15 @@ consider these two alternatives.
 =padbos= is slightly messier to implement, however both alternatives are as efficient as the original =nomask=.
 all three performs similarly, with =padnil= slightly better ([[https://github.com/ysmiraak/eti/tree/master/docs/stats/decoder-current-step-mask.acc.csv][stats]] per 250 updates).
 
+* affine vs linear
+
+affine transformation is not necessary.
+
+| =smsm-samsam= | 100k | 200k |
+|---------------+------+------|
+| affine        | 32.7 | 33.5 |
+| linear        | 32.5 | 33.6 |
+
 * convolutional attention
 
 [[https://arxiv.org/abs/1810.13320][yang et al.]] proposed convolutional self-attention.
@@ -139,20 +148,103 @@ the 2d version also queries across attention heads, which allows the averaging n
 
 * convolution with attention
 
+how much attention do you need?  [[https://aclweb.org/anthology/P18-1167][domhan 2018]]
+
 stacking self-attention layers is wasteful.
 all but the layers which connect to data show interesting patterns,
 the others are mostly diagonal.
 considering the cost of a attention layer is much higher than that of a convolutional layer,
-we can replace all but one of them with convolution.
-
-the encoder becomes a stack of bottleneck convolutional layers followed by the final attention layer.
-this offers better performace on top of being more economical.
+we can replace some of them with convolution.
 
 since the most expensive part with attention is in fact the mlp that follows.
-maybe that can be replaced with convolution as well,
-but so far the results are not as good.
+hopefully that can be replaced with convolution as well.
 
-how to improve the decoder with convolution?
+** encoder
+
+- in the encoder, conv blocks followed by self-attention works better than having just self-attention layers
+- removing self-attention (fully convolutional like conv seq2seq) significantly reduced performance
+- since conv is not the only force at work (self-attention), receptive field is not important,
+  and complicated design (inception) does not help, only makes it more difficult to learn
+  + filter banks (inception) don't help
+  + filter size 3 and 2 performs the same
+  + conv block 4 vs 6 performs the same
+  + in each block, twice conv vs once performs the same
+- conv dimensions around 128 is optimal, 64 works as well, 32 is too small, 256 too large
+- non-linearity is more important than more convolution
+
+| arch                  |    1 |    2 | conv block                         |    n |       f |
+|-----------------------+------+------+------------------------------------+------+---------|
+| smsm-samsam           | 32.5 | 33.6 |                                    |      |         |
+| c6-samsam             | 31.4 | 32.3 | ante      conv relu conv relu post |  128 |       3 |
+| c6sm-samsam           | 32.9 | 33.9 | ante      conv relu conv relu post |  128 |       2 |
+| c4sm-samsam           | 32.9 | 33.9 | ante      conv relu conv relu post |  128 |       2 |
+|-----------------------+------+------+------------------------------------+------+---------|
+| c4sm-samsam_reluante  | 33.2 | 33.8 | ante relu conv relu conv relu post |  128 |       2 |
+| c4sm-samsam_reluante2 | 32.9 | 33.9 | ante relu conv relu           post |  128 |       2 |
+| c4sm-samsam_relu1     | 32.7 | 33.5 | ante      conv relu           post |  128 |       2 |
+| c4sm-samsam_glu       | 32.9 | 33.9 | ante      conv glu            post |  128 |       2 |
+| c4sm-samsam_grelu     | 32.9 |  n/a | ante relu conv glu            post |  128 |       2 |
+| c1sm-samsam_glublock  | 33.0 | 33.8 | ante     (conv glu) x4        post |  128 |       2 |
+| c2sm-samsam_glublock  | 33.0 | 34.1 | ante     (conv glu) x4        post |  128 |       2 |
+| c2sm-samsam_block     | 32.9 | 33.9 | ante     (conv relu) x4       post |  128 |       2 |
+|-----------------------+------+------+------------------------------------+------+---------|
+| c4sm-samsam_bank      | 31.8 |  n/a | ante relu conv relu           post | 64*4 | 1 2 3 4 |
+| c4sm-samsam_fs3       | 33.0 | 33.7 | ante relu conv relu           post |  128 |       3 |
+| c4sm-samsam_fs3x2     | 32.9 | 33.9 | ante      conv relu conv relu post |  128 |       3 |
+|-----------------------+------+------+------------------------------------+------+---------|
+| c4sm-samsam_double    | 33.0 | 33.8 | ante      conv relu conv relu post |  256 |       2 |
+| c4sm-samsam_half      | 32.9 | 33.9 | ante      conv relu conv relu post |   64 |       2 |
+| c4sm-samsam_halfhalf  | 32.5 | 33.5 | ante      conv relu conv relu post |   32 |       2 |
+
+** glu
+
+- bottleneck 128 is the best
+- stacking blocks is better than stacking layers
+- bias not necessary even for sigmoid gate
+- dropout only necessary for each block
+- twin gates \(g \times y + (1-g) \times x\) don't work, make no changes to glu for now
+
+| arch                       |    1 |    2 | n |   d |
+|----------------------------+------+------+---+-----|
+| csm-samsam                 | 33.0 | 33.8 | 4 | 128 |
+| csm-samsam_half            | 33.0 | 33.6 | 4 |  64 |
+| csm-samsam_double          | 33.1 | 33.8 | 4 | 256 |
+| csm-samsam_depth2          | 32.9 | 33.7 | 2 | 128 |
+| csm-samsam_depth3          | 32.8 | 33.9 | 3 | 128 |
+| csm-samsam_depth4          | 32.9 | 33.9 | 4 | 128 |
+| csm-samsam_depth5          | 32.9 | 33.8 | 5 | 128 |
+| csm-samsam_depth6          | 33.0 | 33.8 | 6 | 128 |
+| csm-samsam_depth8          | 33.0 | 33.7 | 8 | 128 |
+| c3sm-samsam_depth2         | 33.0 | 34.2 | 2 | 128 |
+| c2sm-samsam_depth4         | 33.1 | 34.0 | 4 | 128 |
+| c2sm-samsam_depth4_nobias  | 33.2 | 34.0 | 4 | 128 |
+| c2sm-samsam_depth4_twin    | 33.0 | 33.9 | 4 | 128 |
+| c2sm-samsam_depth4_dropout | 33.0 | 33.9 | 4 | 128 |
+
+- consider 512 to be 1 unit
+
+| block             | params |
+|-------------------+--------|
+| mlp               |      8 |
+| att               |      4 |
+| conv relu depth 2 |    3/4 |
+| conv glu depth 2  |      1 |
+| conv glu depth 4  |    1.5 |
+
+** decoder
+
+| arch                    |    1 |    2 |
+|-------------------------+------+------|
+| smsm-samsam             | 32.6 | 33.7 |
+| c3sc3sc3-c3bc3bc3       | 33.0 | 33.8 |
+| c3sc3sc3-c3sac3sac3     | 33.3 | 34.1 |
+| c3sc3sc3-c3asc3asc3     | 32.9 | 34.1 |
+| c3sc3sc3-cscacscacsc    | 33.2 | 34.1 |
+| c3sc3sc3-c3asc3ac3sac3  | 33.4 | 34.1 |
+| c3sc3sc3-samsam         | 33.1 | 34.3 |
+| c3sc3sc3-c3sac3sc3asc3  | 33.4 | 34.3 |
+| c3sc3sc3-c3ac3sc3ac3sc3 | 33.4 | 34.5 |
+| c3sc3sc3-c3sc3ac3sc3ac3 | 33.3 | 34.6 |
 
 * complexity
 
@@ -161,32 +253,43 @@ how to improve the decoder with convolution?
 | t |  64 | time steps           |
 
 ignoring minor costs:
-split, stack, scaling, masking, softmax, relu, residual connection, normalization, gain, and various biases;
+split, stack, scaling, masking, sigmoid, softmax, relu, residual connection, normalization, gain, and bias;
 which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 
-** original transformer self-attention layer
+** mlp layer
 
-| parts      | parameters | complexity     |
-|------------+------------+----------------|
-| key        | d d        | d d t          |
-| value      | d d        | d d t          |
-| query      | d d        | d d t          |
-| weight     |            | d t t          |
-| average    |            | d t t          |
-| mlp in     | d d 4      | d d t 4        |
-| mlp ex     | d d 4      | d d t 4        |
-|------------+------------+----------------|
-| total      | 11 dd      | 11 ddt + 2 dtt |
-| in million | 2.9        | 188.7          |
+| parts      | parameters | complexity |
+|------------+------------+------------|
+| in         | d d 4      | d d t 4    |
+| ex         | d d 4      | d d t 4    |
+|------------+------------+------------|
+| total      | 8 dd       | 8 ddt      |
+| in million | 2.10       | 134.22     |
 
-** bottleneck convolutional layer
+** attention layer
+
+| parts      | parameters | complexity    |
+|------------+------------+---------------|
+| key        | d d        | d d t         |
+| value      | d d        | d d t         |
+| query      | d d        | d d t         |
+| output     | d d        | d d t         |
+| weight     |            | d t t         |
+| average    |            | d t t         |
+|------------+------------+---------------|
+| total      | 4 dd       | 4 ddt + 2 dtt |
+| in million | 1.05       | 71.30         |
+
+** bottleneck glu layer
 
 | parts      | parameters  | complexity    |
 |------------+-------------+---------------|
 | in         | b d         | b d t         |
 | conv1      | b b 2       | b b t 2       |
+| gate1      | b b 2       | b b t 2       |
 | conv2      | b b 2       | b b t 2       |
+| gate2      | b b 2       | b b t 2       |
 | ex         | b d         | b d t         |
 |------------+-------------+---------------|
-| total      | 2 bd + 4 bb | 2 bdt + 4 bbt |
-| in million | 0.2         | 12.6          |
+| total      | 2 bd + 8 bb | 2 bdt + 8 bbt |
+| in million | 0.26        | 16.78         |

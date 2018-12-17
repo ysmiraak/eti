@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2018-12-09 Sun 23:45 -->
+<!-- 2018-12-17 Mon 23:34 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>transformer</title>
@@ -256,24 +256,32 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org0b8e09b">1. preprocessing</a></li>
-<li><a href="#org01f1519">2. initialization</a></li>
-<li><a href="#org0d87971">3. attention</a></li>
-<li><a href="#org6756a84">4. masking current step in self-attention</a></li>
-<li><a href="#orgc218258">5. convolutional attention</a></li>
-<li><a href="#orgc908c32">6. convolution with attention</a></li>
-<li><a href="#orgc77ffcf">7. complexity</a>
+<li><a href="#org1ac7338">1. preprocessing</a></li>
+<li><a href="#orgb5007b2">2. initialization</a></li>
+<li><a href="#org02baee0">3. attention</a></li>
+<li><a href="#orgb4fe2a0">4. masking current step in self-attention</a></li>
+<li><a href="#org4672dd4">5. affine vs linear</a></li>
+<li><a href="#org7f38ee5">6. convolutional attention</a></li>
+<li><a href="#org6381c2e">7. convolution with attention</a>
 <ul>
-<li><a href="#org1af1cef">7.1. original transformer self-attention layer</a></li>
-<li><a href="#org18468bb">7.2. bottleneck convolutional layer</a></li>
+<li><a href="#org4a5b443">7.1. encoder</a></li>
+<li><a href="#orgc65ee19">7.2. glu</a></li>
+<li><a href="#orgad578af">7.3. decoder</a></li>
+</ul>
+</li>
+<li><a href="#org119981f">8. complexity</a>
+<ul>
+<li><a href="#org63ccf85">8.1. mlp layer</a></li>
+<li><a href="#org37a88c6">8.2. attention layer</a></li>
+<li><a href="#org8086e27">8.3. bottleneck glu layer</a></li>
 </ul>
 </li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-org0b8e09b" class="outline-2">
-<h2 id="org0b8e09b"><span class="section-number-2">1</span> preprocessing</h2>
+<div id="outline-container-org1ac7338" class="outline-2">
+<h2 id="org1ac7338"><span class="section-number-2">1</span> preprocessing</h2>
 <div class="outline-text-2" id="text-1">
 <p>
 <a href="https://github.com/google/sentencepiece">sentencepiece</a> supports <b>bpe</b> (<a href="https://www.aclweb.org/anthology/P16-1162">sennrich et al.</a>) and <b>unigram</b> (<a href="https://arxiv.org/abs/1804.10959">kudo</a>) segmentations.
@@ -335,8 +343,8 @@ bleu scores with two layered transformer (<code>smsm-samsam</code> architecture)
 </div>
 </div>
 
-<div id="outline-container-org01f1519" class="outline-2">
-<h2 id="org01f1519"><span class="section-number-2">2</span> initialization</h2>
+<div id="outline-container-orgb5007b2" class="outline-2">
+<h2 id="orgb5007b2"><span class="section-number-2">2</span> initialization</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 by default tensorflow uses <b>glorot</b> initialization (<a href="http://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf">glorot &amp; bengio</a>),
@@ -465,8 +473,8 @@ but no difference to the bleu scores.
 </div>
 </div>
 
-<div id="outline-container-org0d87971" class="outline-2">
-<h2 id="org0d87971"><span class="section-number-2">3</span> attention</h2>
+<div id="outline-container-org02baee0" class="outline-2">
+<h2 id="org02baee0"><span class="section-number-2">3</span> attention</h2>
 <div class="outline-text-2" id="text-3">
 \begin{align*}
 k , v , q &: \mathbb{N}_{+} &&\textrm{dimensions for key, value, query}\\
@@ -483,8 +491,8 @@ f \; w \; x &= (f_{v} \; w)^{T} \; (f_{a} \; (f_{k} \; w) \; (f_{q} \; x)) &&\\
 </div>
 </div>
 
-<div id="outline-container-org6756a84" class="outline-2">
-<h2 id="org6756a84"><span class="section-number-2">4</span> masking current step in self-attention</h2>
+<div id="outline-container-orgb4fe2a0" class="outline-2">
+<h2 id="orgb4fe2a0"><span class="section-number-2">4</span> masking current step in self-attention</h2>
 <div class="outline-text-2" id="text-4">
 <p>
 the current step almost always gets the highest attention weight,
@@ -520,9 +528,50 @@ all three performs similarly, with <code>padnil</code> slightly better (<a href=
 </div>
 </div>
 
-<div id="outline-container-orgc218258" class="outline-2">
-<h2 id="orgc218258"><span class="section-number-2">5</span> convolutional attention</h2>
+<div id="outline-container-org4672dd4" class="outline-2">
+<h2 id="org4672dd4"><span class="section-number-2">5</span> affine vs linear</h2>
 <div class="outline-text-2" id="text-5">
+<p>
+affine transformation is not necessary.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left"><code>smsm-samsam</code></th>
+<th scope="col" class="org-right">100k</th>
+<th scope="col" class="org-right">200k</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">affine</td>
+<td class="org-right">32.7</td>
+<td class="org-right">33.5</td>
+</tr>
+
+<tr>
+<td class="org-left">linear</td>
+<td class="org-right">32.5</td>
+<td class="org-right">33.6</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-org7f38ee5" class="outline-2">
+<h2 id="org7f38ee5"><span class="section-number-2">6</span> convolutional attention</h2>
+<div class="outline-text-2" id="text-6">
 <p>
 <a href="https://arxiv.org/abs/1810.13320">yang et al.</a> proposed convolutional self-attention.
 the 1d version is basically the restricted attention mentioned by <a href="https://arxiv.org/abs/1706.03762">vaswani et al.</a> in the original transformer paper.
@@ -531,37 +580,527 @@ the 2d version also queries across attention heads, which allows the averaging n
 </div>
 </div>
 
-<div id="outline-container-orgc908c32" class="outline-2">
-<h2 id="orgc908c32"><span class="section-number-2">6</span> convolution with attention</h2>
-<div class="outline-text-2" id="text-6">
+<div id="outline-container-org6381c2e" class="outline-2">
+<h2 id="org6381c2e"><span class="section-number-2">7</span> convolution with attention</h2>
+<div class="outline-text-2" id="text-7">
+<p>
+how much attention do you need?  <a href="https://aclweb.org/anthology/P18-1167">domhan 2018</a>
+</p>
+
 <p>
 stacking self-attention layers is wasteful.
 all but the layers which connect to data show interesting patterns,
 the others are mostly diagonal.
 considering the cost of a attention layer is much higher than that of a convolutional layer,
-we can replace all but one of them with convolution.
-</p>
-
-<p>
-the encoder becomes a stack of bottleneck convolutional layers followed by the final attention layer.
-this offers better performace on top of being more economical.
+we can replace some of them with convolution.
 </p>
 
 <p>
 since the most expensive part with attention is in fact the mlp that follows.
-maybe that can be replaced with convolution as well,
-but so far the results are not as good.
+hopefully that can be replaced with convolution as well.
 </p>
+</div>
 
-<p>
-how to improve the decoder with convolution?
-</p>
+<div id="outline-container-org4a5b443" class="outline-3">
+<h3 id="org4a5b443"><span class="section-number-3">7.1</span> encoder</h3>
+<div class="outline-text-3" id="text-7-1">
+<ul class="org-ul">
+<li>in the encoder, conv blocks followed by self-attention works better than having just self-attention layers</li>
+<li>removing self-attention (fully convolutional like conv seq2seq) significantly reduced performance</li>
+<li>since conv is not the only force at work (self-attention), receptive field is not important,
+and complicated design (inception) does not help, only makes it more difficult to learn
+<ul class="org-ul">
+<li>filter banks (inception) don't help</li>
+<li>filter size 3 and 2 performs the same</li>
+<li>conv block 4 vs 6 performs the same</li>
+<li>in each block, twice conv vs once performs the same</li>
+</ul></li>
+<li>conv dimensions around 128 is optimal, 64 works as well, 32 is too small, 256 too large</li>
+<li>non-linearity is more important than more convolution</li>
+</ul>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">arch</th>
+<th scope="col" class="org-right">1</th>
+<th scope="col" class="org-right">2</th>
+<th scope="col" class="org-left">conv block</th>
+<th scope="col" class="org-right">n</th>
+<th scope="col" class="org-right">f</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">smsm-samsam</td>
+<td class="org-right">32.5</td>
+<td class="org-right">33.6</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">&#xa0;</td>
+<td class="org-right">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="org-left">c6-samsam</td>
+<td class="org-right">31.4</td>
+<td class="org-right">32.3</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">128</td>
+<td class="org-right">3</td>
+</tr>
+
+<tr>
+<td class="org-left">c6sm-samsam</td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam</td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">c4sm-samsam<sub>reluante</sub></td>
+<td class="org-right">33.2</td>
+<td class="org-right">33.8</td>
+<td class="org-left">ante relu conv relu conv relu post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>reluante2</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante relu conv relu           post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>relu1</sub></td>
+<td class="org-right">32.7</td>
+<td class="org-right">33.5</td>
+<td class="org-left">ante      conv relu           post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>glu</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante      conv glu            post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>grelu</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">n/a</td>
+<td class="org-left">ante relu conv glu            post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c1sm-samsam<sub>glublock</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.8</td>
+<td class="org-left">ante     (conv glu) x4        post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>glublock</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">34.1</td>
+<td class="org-left">ante     (conv glu) x4        post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>block</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante     (conv relu) x4       post</td>
+<td class="org-right">128</td>
+<td class="org-right">2</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">c4sm-samsam<sub>bank</sub></td>
+<td class="org-right">31.8</td>
+<td class="org-right">n/a</td>
+<td class="org-left">ante relu conv relu           post</td>
+<td class="org-right">64*4</td>
+<td class="org-right">1 2 3 4</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>fs3</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.7</td>
+<td class="org-left">ante relu conv relu           post</td>
+<td class="org-right">128</td>
+<td class="org-right">3</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>fs3x2</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">128</td>
+<td class="org-right">3</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">c4sm-samsam<sub>double</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.8</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">256</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>half</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">64</td>
+<td class="org-right">2</td>
+</tr>
+
+<tr>
+<td class="org-left">c4sm-samsam<sub>halfhalf</sub></td>
+<td class="org-right">32.5</td>
+<td class="org-right">33.5</td>
+<td class="org-left">ante      conv relu conv relu post</td>
+<td class="org-right">32</td>
+<td class="org-right">2</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 
-<div id="outline-container-orgc77ffcf" class="outline-2">
-<h2 id="orgc77ffcf"><span class="section-number-2">7</span> complexity</h2>
-<div class="outline-text-2" id="text-7">
+<div id="outline-container-orgc65ee19" class="outline-3">
+<h3 id="orgc65ee19"><span class="section-number-3">7.2</span> glu</h3>
+<div class="outline-text-3" id="text-7-2">
+<ul class="org-ul">
+<li>bottleneck 128 is the best</li>
+<li>stacking blocks is better than stacking layers</li>
+<li>bias not necessary even for sigmoid gate</li>
+<li>dropout only necessary for each block</li>
+<li>twin gates \(g \times y + (1-g) \times x\) don't work, make no changes to glu for now</li>
+</ul>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">arch</th>
+<th scope="col" class="org-right">1</th>
+<th scope="col" class="org-right">2</th>
+<th scope="col" class="org-right">n</th>
+<th scope="col" class="org-right">d</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">csm-samsam</td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.8</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>half</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.6</td>
+<td class="org-right">4</td>
+<td class="org-right">64</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>double</sub></td>
+<td class="org-right">33.1</td>
+<td class="org-right">33.8</td>
+<td class="org-right">4</td>
+<td class="org-right">256</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth2</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.7</td>
+<td class="org-right">2</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth3</sub></td>
+<td class="org-right">32.8</td>
+<td class="org-right">33.9</td>
+<td class="org-right">3</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth4</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.9</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth5</sub></td>
+<td class="org-right">32.9</td>
+<td class="org-right">33.8</td>
+<td class="org-right">5</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth6</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.8</td>
+<td class="org-right">6</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">csm-samsam<sub>depth8</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.7</td>
+<td class="org-right">8</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sm-samsam<sub>depth2</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">34.2</td>
+<td class="org-right">2</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>depth4</sub></td>
+<td class="org-right">33.1</td>
+<td class="org-right">34.0</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>depth4</sub><sub>nobias</sub></td>
+<td class="org-right">33.2</td>
+<td class="org-right">34.0</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>depth4</sub><sub>twin</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.9</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+
+<tr>
+<td class="org-left">c2sm-samsam<sub>depth4</sub><sub>dropout</sub></td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.9</td>
+<td class="org-right">4</td>
+<td class="org-right">128</td>
+</tr>
+</tbody>
+</table>
+
+<ul class="org-ul">
+<li>consider 512 to be 1 unit</li>
+</ul>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">block</th>
+<th scope="col" class="org-right">params</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">mlp</td>
+<td class="org-right">8</td>
+</tr>
+
+<tr>
+<td class="org-left">att</td>
+<td class="org-right">4</td>
+</tr>
+
+<tr>
+<td class="org-left">conv relu depth 2</td>
+<td class="org-right">3/4</td>
+</tr>
+
+<tr>
+<td class="org-left">conv glu depth 2</td>
+<td class="org-right">1</td>
+</tr>
+
+<tr>
+<td class="org-left">conv glu depth 4</td>
+<td class="org-right">1.5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-orgad578af" class="outline-3">
+<h3 id="orgad578af"><span class="section-number-3">7.3</span> decoder</h3>
+<div class="outline-text-3" id="text-7-3">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">arch</th>
+<th scope="col" class="org-right">1</th>
+<th scope="col" class="org-right">2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">smsm-samsam</td>
+<td class="org-right">32.6</td>
+<td class="org-right">33.7</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3bc3bc3</td>
+<td class="org-right">33.0</td>
+<td class="org-right">33.8</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3sac3sac3</td>
+<td class="org-right">33.3</td>
+<td class="org-right">34.1</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3asc3asc3</td>
+<td class="org-right">32.9</td>
+<td class="org-right">34.1</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-cscacscacsc</td>
+<td class="org-right">33.2</td>
+<td class="org-right">34.1</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3asc3ac3sac3</td>
+<td class="org-right">33.4</td>
+<td class="org-right">34.1</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-samsam</td>
+<td class="org-right">33.1</td>
+<td class="org-right">34.3</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3sac3sc3asc3</td>
+<td class="org-right">33.4</td>
+<td class="org-right">34.3</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3ac3sc3ac3sc3</td>
+<td class="org-right">33.4</td>
+<td class="org-right">34.5</td>
+</tr>
+
+<tr>
+<td class="org-left">c3sc3sc3-c3sc3ac3sc3ac3</td>
+<td class="org-right">33.3</td>
+<td class="org-right">34.6</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org119981f" class="outline-2">
+<h2 id="org119981f"><span class="section-number-2">8</span> complexity</h2>
+<div class="outline-text-2" id="text-8">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -595,14 +1134,64 @@ how to improve the decoder with convolution?
 
 <p>
 ignoring minor costs:
-split, stack, scaling, masking, softmax, relu, residual connection, normalization, gain, and various biases;
+split, stack, scaling, masking, sigmoid, softmax, relu, residual connection, normalization, gain, and bias;
 which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </p>
 </div>
 
-<div id="outline-container-org1af1cef" class="outline-3">
-<h3 id="org1af1cef"><span class="section-number-3">7.1</span> original transformer self-attention layer</h3>
-<div class="outline-text-3" id="text-7-1">
+<div id="outline-container-org63ccf85" class="outline-3">
+<h3 id="org63ccf85"><span class="section-number-3">8.1</span> mlp layer</h3>
+<div class="outline-text-3" id="text-8-1">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">parts</th>
+<th scope="col" class="org-left">parameters</th>
+<th scope="col" class="org-left">complexity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">in</td>
+<td class="org-left">d d 4</td>
+<td class="org-left">d d t 4</td>
+</tr>
+
+<tr>
+<td class="org-left">ex</td>
+<td class="org-left">d d 4</td>
+<td class="org-left">d d t 4</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="org-left">total</td>
+<td class="org-left">8 dd</td>
+<td class="org-left">8 ddt</td>
+</tr>
+
+<tr>
+<td class="org-left">in million</td>
+<td class="org-left">2.10</td>
+<td class="org-left">134.22</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-org37a88c6" class="outline-3">
+<h3 id="org37a88c6"><span class="section-number-3">8.2</span> attention layer</h3>
+<div class="outline-text-3" id="text-8-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -640,6 +1229,12 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </tr>
 
 <tr>
+<td class="org-left">output</td>
+<td class="org-left">d d</td>
+<td class="org-left">d d t</td>
+</tr>
+
+<tr>
 <td class="org-left">weight</td>
 <td class="org-left">&#xa0;</td>
 <td class="org-left">d t t</td>
@@ -650,39 +1245,27 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 <td class="org-left">&#xa0;</td>
 <td class="org-left">d t t</td>
 </tr>
-
-<tr>
-<td class="org-left">mlp in</td>
-<td class="org-left">d d 4</td>
-<td class="org-left">d d t 4</td>
-</tr>
-
-<tr>
-<td class="org-left">mlp ex</td>
-<td class="org-left">d d 4</td>
-<td class="org-left">d d t 4</td>
-</tr>
 </tbody>
 <tbody>
 <tr>
 <td class="org-left">total</td>
-<td class="org-left">11 dd</td>
-<td class="org-left">11 ddt + 2 dtt</td>
+<td class="org-left">4 dd</td>
+<td class="org-left">4 ddt + 2 dtt</td>
 </tr>
 
 <tr>
 <td class="org-left">in million</td>
-<td class="org-left">2.9</td>
-<td class="org-left">188.7</td>
+<td class="org-left">1.05</td>
+<td class="org-left">71.30</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-org18468bb" class="outline-3">
-<h3 id="org18468bb"><span class="section-number-3">7.2</span> bottleneck convolutional layer</h3>
-<div class="outline-text-3" id="text-7-2">
+<div id="outline-container-org8086e27" class="outline-3">
+<h3 id="org8086e27"><span class="section-number-3">8.3</span> bottleneck glu layer</h3>
+<div class="outline-text-3" id="text-8-3">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -714,7 +1297,19 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </tr>
 
 <tr>
+<td class="org-left">gate1</td>
+<td class="org-left">b b 2</td>
+<td class="org-left">b b t 2</td>
+</tr>
+
+<tr>
 <td class="org-left">conv2</td>
+<td class="org-left">b b 2</td>
+<td class="org-left">b b t 2</td>
+</tr>
+
+<tr>
+<td class="org-left">gate2</td>
 <td class="org-left">b b 2</td>
 <td class="org-left">b b t 2</td>
 </tr>
@@ -728,14 +1323,14 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 <tbody>
 <tr>
 <td class="org-left">total</td>
-<td class="org-left">2 bd + 4 bb</td>
-<td class="org-left">2 bdt + 4 bbt</td>
+<td class="org-left">2 bd + 8 bb</td>
+<td class="org-left">2 bdt + 8 bbt</td>
 </tr>
 
 <tr>
 <td class="org-left">in million</td>
-<td class="org-left">0.2</td>
-<td class="org-left">12.6</td>
+<td class="org-left">0.26</td>
+<td class="org-left">16.78</td>
 </tr>
 </tbody>
 </table>
@@ -745,7 +1340,7 @@ which all have at most \(O(d)\) parameters and \(O(dt)\) complexity.
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: kuan yu</p>
-<p class="date">Created: 2018-12-09 Sun 23:45</p>
+<p class="date">Created: 2018-12-17 Mon 23:34</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
