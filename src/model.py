@@ -130,12 +130,23 @@ class Decode(Record):
     def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.blocks = AttBlock(dim, 's1') \
-                ,         AttBlock(dim, 'a1') \
-                ,         MlpBlock(dim, 'm1') \
-                ,         AttBlock(dim, 's2') \
-                ,         AttBlock(dim, 'a2') \
-                ,         MlpBlock(dim, 'm2')
+            self.blocks = GluBlock(dim, 'c1-1') \
+                ,         GluBlock(dim, 'c1-2') \
+                ,         GluBlock(dim, 'c1-3') \
+                ,         AttBlock(dim, 's1'  ) \
+                ,         AttBlock(dim, 'a1'  ) \
+                ,         GluBlock(dim, 'c2-1') \
+                ,         GluBlock(dim, 'c2-2') \
+                ,         GluBlock(dim, 'c2-3') \
+                ,         AttBlock(dim, 's2'  ) \
+                ,         GluBlock(dim, 'c2-4') \
+                ,         GluBlock(dim, 'c2-5') \
+                ,         GluBlock(dim, 'c2-6') \
+                ,         AttBlock(dim, 'a3'  ) \
+                ,         AttBlock(dim, 's3'  ) \
+                ,         GluBlock(dim, 'c3-1') \
+                ,         GluBlock(dim, 'c3-2') \
+                ,         GluBlock(dim, 'c3-3')
 
     def __call__(self, x, m, w, n, dropout, name= None):
         with scope(name or self.name):
