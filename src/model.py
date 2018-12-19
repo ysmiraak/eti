@@ -211,15 +211,15 @@ class Decode(Record):
                         d = block.ante(x)
                         if hasattr(block, 'gate'):
                             for gate, conv in zip(block.gate, block.conv):
-                                ds.append(d)
                                 c, i = cs[i], i + 1
                                 d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                ds.append(d[:,:,1:])
                                 d = tf.sigmoid(gate(d)) * conv(d)
                         else:
                             for conv in block.conv:
-                                ds.append(d)
                                 c, i = cs[i], i + 1
                                 d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                ds.append(d[:,:,1:])
                                 d = tf.nn.relu(conv(d))
                         x = block.norm(x + dropout(block.post(d)))
                 elif 'b' == btype:
