@@ -136,58 +136,50 @@ class Embed(Record):
 class Conv(Record):
     """convolution from `m` to `n` channels
 
-    the default parameters make a position-wise affine layer
+    the default parameters make a position-wise linear layer
 
     """
 
-    def __init__(self, n, m= None, shape= (1,), bias= False, act= None, init= None, name= 'conv'):
+    def __init__(self, n, m= None, size= 1, init= 'vso1', name= 'conv'):
         if m is None: m = n
-        self.act = act
-        self.form = ('NCW', 'NCHW', 'NCDHW')[len(shape) - 1]
         self.name = name
         with scope(name):
-            self.kern = variable('kern', shape + (m, n), init or 'vso2' if tf.nn.relu == act else 'vso1')
-            self.bias = variable('bias', (1, n) + (1,) * len(shape), 'zero') if bias else None
-
-    def __call__(self, x, padding= 'VALID', stride= None, dilation= None, name= None):
-        with scope(name or self.name):
-            x = tf.nn.convolution(
-                x, self.kern
-                , padding= padding
-                , strides= stride
-                , dilation_rate= dilation
-                , data_format= self.form)
-            if self.bias is not None: x += self.bias
-            if self.act is not None: x = self.act(x)
-            return x
-
-
-class Multilayer(Record):
-    """position-wise mlp from `m` to `n`, with `dim` type units between
-
-    if dim is None,          m -> n
-
-    if isinstance(dim, int), m -> dim -> act -> n
-
-    if dim == (d1, ..., dx), m -> d1 -> act -> ... -> dx -> act -> n
-
-    """
-
-    def __init__(self, n, m= None, dim= None, act= tf.nn.relu, name= 'multilayer'):
-        if m is None: m = n
-        if dim is None: dim = ()
-        if isinstance(dim, int): dim = dim,
-        dim = (m,) + dim
-        self.name = name
-        with scope(name):
-            self.layers = tuple(
-                Conv(i, j, act= act, name= "layer{}".format(k)) for k, (j, i) in enumerate(zip(dim, dim[1:]), 1)
-            ) + (Conv(n, dim[-1], name= 'layer'),)
+            self.kern = variable('kern', (size, m, n), init)
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
-            for layer in self.layers: x = layer(x)
-            return x
+            return tf.nn.convolution(x, self.kern, padding= 'VALID', data_format= 'NCW')
+
+    def shape(self):
+        return tuple(self.kern.shape.as_list())
+
+
+class SepConv(Record):
+    """separable convolution from `m` to `n` channels"""
+
+    def __init__(self, n, m= None, size= 2, init= 'vso2', name= 'conv'):
+        if m is None: m = n
+        self.name = name
+        with scope(name):
+            self.kern_depthwise = variable('kern_depthwise', (1, size, m, 1), 'vso1')
+            self.kern_pointwise = variable('kern_pointwise', (1,    1, m, n),  init )
+
+    def __call__(self, x, name= None):
+        with scope(name or self.name):
+            return tf.squeeze( # bdt
+                tf.nn.separable_conv2d(
+                    tf.expand_dims(x, axis= 2) # bd1t
+                    , depthwise_filter= self.kern_depthwise  # 1sm1
+                    , pointwise_filter= self.kern_pointwise  # 11mn
+                    , strides= (1, 1, 1, 1)
+                    , padding= 'VALID'
+                    , data_format= 'NCHW')
+                , axis= 2)
+
+    def shape(self):
+        _, s, _, _ = self.kern_depthwise.shape.as_list()
+        _, _, m, n = self.kern_pointwise.shape.as_list()
+        return (s, m, n)
 
 
 class Attention(Record):

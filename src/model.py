@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention
+from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, SepConv, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -37,6 +37,20 @@ class Sinusoid(Record):
             return sinusoid(self.dim, time) if self.pos is None else self.pos[:,:time]
 
 
+class MlpBlock(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.lin  = Conv(4*dim, dim, init= 'vso2', name= 'lin')
+            self.lex  = Conv(dim, 4*dim, init= 'vso1', name= 'lex')
+            self.norm = Normalize(dim)
+
+    def __call__(self, x, dropout, name= None):
+        with scope(name or self.name):
+            return self.norm(x + dropout(self.lex(tf.nn.relu(self.lin(x)))))
+
+
 class AttBlock(Record):
 
     def __init__(self, dim, name):
@@ -69,32 +83,40 @@ class GluBlock(Record):
     def __init__(self, dim, name, mid= 128, depth= 2):
         self.name = name
         with scope(name):
-            self.ante =       Conv(mid, dim, shape= (1,), init= 'vso1', name= 'ante')
-            self.gate = tuple(Conv(mid, mid, shape= (2,), init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
-            self.conv = tuple(Conv(mid, mid, shape= (2,), init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
-            self.post =       Conv(dim, mid, shape= (1,), init= 'vso1', name= 'post')
+            self.ante =       Conv(mid, dim, size= 1, init= 'vso1', name= 'ante')
+            self.gate = tuple(Conv(mid, mid, size= 2, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, size= 2, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, size= 1, init= 'vso1', name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
             y = self.ante(x)
             for gate, conv in zip(self.gate, self.conv):
-                y = tf.pad(y, ((0,0),(0,0),(1,0)))
+                y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
                 y = tf.sigmoid(gate(y)) * conv(y)
             return self.norm(x + dropout(self.post(y)))
 
 
-class MlpBlock(Record):
+class SepBlock(Record):
 
-    def __init__(self, dim, name):
+    def __init__(self, dim, name, size= 2, depth= 1):
         self.name = name
         with scope(name):
-            self.mlp = Multilayer(dim, dim, 2048)
-            self.norm = Normalize(dim)
+            self.ante = self.post = identity
+            # self.gate = tuple(SepConv(dim, dim, size= size, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(SepConv(dim, dim, size= size, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
-            return self.norm(x + dropout(self.mlp(x)))
+            y = self.ante(x)
+            # for gate, conv in zip(self.gate, self.conv):
+            #     y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
+            #     y = tf.sigmoid(gate(y)) * conv(y)
+            for conv in self.conv:
+                y = tf.nn.relu(conv(tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))))
+            return self.norm(x + dropout(self.post(y)))
 
 
 class Encode(Record):
@@ -102,17 +124,17 @@ class Encode(Record):
     def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.blocks = GluBlock(dim, 'c1') \
-                ,         GluBlock(dim, 'c2') \
-                ,         GluBlock(dim, 'c3') \
+            self.blocks = GluBlock(dim, 'c1-1') \
+                ,         GluBlock(dim, 'c1-2') \
+                ,         GluBlock(dim, 'c1-3') \
                 ,         AttBlock(dim, 's1') \
-                ,         GluBlock(dim, 'c4') \
-                ,         GluBlock(dim, 'c5') \
-                ,         GluBlock(dim, 'c6') \
+                ,         GluBlock(dim, 'c2-1') \
+                ,         GluBlock(dim, 'c2-2') \
+                ,         GluBlock(dim, 'c2-3') \
                 ,         AttBlock(dim, 's2') \
-                ,         GluBlock(dim, 'c7') \
-                ,         GluBlock(dim, 'c8') \
-                ,         GluBlock(dim, 'c9') \
+                ,         GluBlock(dim, 'c3-1') \
+                ,         GluBlock(dim, 'c3-2') \
+                ,         GluBlock(dim, 'c3-3') \
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):
@@ -166,7 +188,7 @@ class Decode(Record):
             btype = block.name[0]
             if 'c' == btype:
                 for conv in block.conv:
-                    s, n, _ = conv.kern.shape.as_list()
+                    s, n, _ = conv.shape()
                     try:
                         c, c_shape = sn2cs[(s, n)]
                     except KeyError:
@@ -187,11 +209,18 @@ class Decode(Record):
                 if 'c' == btype:
                     with scope(block.name):
                         d = block.ante(x)
-                        for gate, conv in zip(block.gate, block.conv):
-                            ds.append(d)
-                            c, i = cs[i], i + 1
-                            d = tf.concat((c, d), axis= -1, name= 'cache_c')
-                            d = tf.sigmoid(gate(d)) * conv(d)
+                        if hasattr(block, 'gate'):
+                            for gate, conv in zip(block.gate, block.conv):
+                                ds.append(d)
+                                c, i = cs[i], i + 1
+                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                d = tf.sigmoid(gate(d)) * conv(d)
+                        else:
+                            for conv in block.conv:
+                                ds.append(d)
+                                c, i = cs[i], i + 1
+                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                d = tf.nn.relu(conv(d))
                         x = block.norm(x + dropout(block.post(d)))
                 elif 'b' == btype:
                     v, j = vs[j], j + 1
