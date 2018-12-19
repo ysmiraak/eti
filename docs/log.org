@@ -34,3 +34,13 @@ number of instances in each corpus
 - ignore duplicate instances
 - 1275006 shared unique instances
 - randomly split 4096 instances for evaluation
+
+for model 1
+
+- randomly split 1024 instances from each corpus for validation
+- 1024 * 3 * 2 = 6144 validation instances in total
+
+for model 0 2 3
+
+- randomly split 2048 instances from nl for validation
+- 2048 * 2 = 4096 validation instances in total
