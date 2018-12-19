@@ -4,8 +4,8 @@ from model import Model, batch_run
 from tqdm import tqdm
 from trial import config as C, paths as P, train as T
 from util import partial, select
-from util_io import pform, load_txt, save_txt, load_pkl
-from util_np import np, vpack, sample
+from util_io import pform, load_txt, save_txt
+from util_np import np, partition, batch_sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
@@ -14,50 +14,64 @@ tf.set_random_seed(C.seed)
 # load data #
 #############
 
-vocab_src = load_spm(pform(P.data, "vocab_src.model"))
-vocab_tgt = load_spm(pform(P.data, "vocab_tgt.model"))
-src_valid = np.load(pform(P.data, "valid_src.npy"))
-tgt_valid = np.load(pform(P.data, "valid_tgt.npy"))
+valid_da_da = np.load(pform(P.data, "valid_da_da.npy"))
+valid_da_en = np.load(pform(P.data, "valid_da_en.npy"))
+valid_de_de = np.load(pform(P.data, "valid_de_de.npy"))
+valid_de_en = np.load(pform(P.data, "valid_de_en.npy"))
+valid_sv_en = np.load(pform(P.data, "valid_sv_en.npy"))
+valid_sv_sv = np.load(pform(P.data, "valid_sv_sv.npy"))
 
-def batch(batch= C.batch_train
-          , seed= C.seed
-          , vocab_src= vocab_src, path_src= pform(P.data, "train_src.txt")
-          , vocab_tgt= vocab_tgt, path_tgt= pform(P.data, "train_tgt.txt")
-          , eos= C.eos
-          , cap= C.cap):
-    src, tgt = tuple(load_txt(path_src)), tuple(load_txt(path_tgt))
-    bas, bat = [], []
-    for i in sample(len(src), seed):
-        if batch == len(bas):
-            yield vpack(bas, (batch, cap), eos, np.int32) \
-                , vpack(bat, (batch, cap), eos, np.int32)
-            bas, bat = [], []
-        # s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
-        # t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
-        s = vocab_src.encode_as_ids(src[i])
-        t = vocab_tgt.encode_as_ids(tgt[i])
-        if 0 < len(s) <= cap and 0 < len(t) <= cap:
-            bas.append(s)
-            bat.append(t)
+train_da_da = np.load(pform(P.data, "train_da_da.npy"))
+train_da_en = np.load(pform(P.data, "train_da_en.npy"))
+train_de_de = np.load(pform(P.data, "train_de_de.npy"))
+train_de_en = np.load(pform(P.data, "train_de_en.npy"))
+train_sv_en = np.load(pform(P.data, "train_sv_en.npy"))
+train_sv_sv = np.load(pform(P.data, "train_sv_sv.npy"))
+
+def batch_valid(src, tgt, size= 256):
+    assert 1024 == len(src) == len(tgt)
+    while True:
+        for i, j in partition(1024, size):
+            yield src[i:j], tgt[i:j]
+
+def batch_train(src, tgt, size= 12):
+    assert len(src) == len(tgt)
+    for i in batch_sample(len(src), size):
+        yield src[i], tgt[i]
 
 ###############
 # build model #
 ###############
 
 model = Model.new(**select(C, *Model._new))
-modat = model.data()
-valid = modat.valid()
-infer = modat.infer()
 
-# # for profiling
-# m, src, tgt = modat, src_valid[:32], tgt_valid[:32]
-# from util_tf import profile
-# with tf.Session() as sess:
-#     tf.global_variables_initializer().run()
-#     with tf.summary.FileWriter(pform(P.log, C.trial), sess.graph) as wtr:
-#         profile(sess, wtr, (infer.pred, valid.errt), feed_dict= {m.src_: src, m.tgt_: tgt})
+da_da, da_en = pipe(partial(batch_valid, valid_da_da, valid_da_en), (tf.int32, tf.int32), prefetch= 4)
+de_de, de_en = pipe(partial(batch_valid, valid_de_de, valid_de_en), (tf.int32, tf.int32), prefetch= 4)
+sv_sv, sv_en = pipe(partial(batch_valid, valid_sv_sv, valid_sv_en), (tf.int32, tf.int32), prefetch= 4)
 
-train = model.data(*pipe(batch, (tf.int32, tf.int32), prefetch= 16)).train(**T)
+valid = model.data(1, 0, da_da, da_en).valid() \
+    ,   model.data(2, 0, de_de, de_en).valid() \
+    ,   model.data(3, 0, sv_sv, sv_en).valid() \
+    ,   model.data(0, 3, sv_en, sv_sv).valid() \
+    ,   model.data(0, 2, de_en, de_de).valid() \
+    ,   model.data(0, 1, da_en, da_da).valid()
+
+da_da, da_en = pipe(partial(batch_train, train_da_da, train_da_en), (tf.int32, tf.int32), prefetch= 16)
+de_de, de_en = pipe(partial(batch_train, train_de_de, train_de_en), (tf.int32, tf.int32), prefetch= 16)
+sv_sv, sv_en = pipe(partial(batch_train, train_sv_sv, train_sv_en), (tf.int32, tf.int32), prefetch= 16)
+
+train = model.data(1, 0, da_da, da_en).train(**T) \
+    ,   model.data(2, 0, de_de, de_en).train(**T) \
+    ,   model.data(3, 0, sv_sv, sv_en).train(**T) \
+    ,   model.data(0, 3, sv_en, sv_sv).train(**T) \
+    ,   model.data(0, 2, de_en, de_de).train(**T) \
+    ,   model.data(0, 1, da_en, da_da).train(**T)
+
+model.lr   = train[0].lr
+model.step = train[0].step
+model.errt = train[0].errt
+model.loss = tf.add_n([t.loss for t in train])
+model.down = tf.train.AdamOptimizer(model.lr, T.beta1, T.beta2, T.epsilon).minimize(model.loss, model.step)
 
 ############
 # training #
@@ -72,29 +86,20 @@ else:
 
 def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
-             ( tf.summary.scalar('step_loss', valid.loss)
-             , tf.summary.scalar('step_errt', valid.errt)))):
-    loss, errt = map(np.mean, zip(*batch_run(
-        sess= sess
-        , model= valid
-        , fetch= (valid.loss, valid.errt)
-        , src= src_valid
-        , tgt= tgt_valid
-        , batch= C.batch_valid)))
-    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.errt: errt}), step)
+             ( tf.summary.scalar('step_errt', model.errt)
+             , tf.summary.scalar('step_loss', model.loss)))):
+    errt_loss = []
+    for m in valid:
+        for _ in range(4): # 4 * 256 = 1024
+            errt_loss.append(sess.run((m.errt, m.loss)))
+    errt, loss = map(np.mean, zip(*errt_loss))
+    wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-def trans(sents, model= infer):
-    if not isinstance(sents, np.ndarray):
-        sents = encode(vocab_src, sents, C.cap, np.int32)
-    for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_valid):
-        yield from decode(vocab_tgt, preds)
-
-for _ in range(2):
-    for _ in range(400):
-        for _ in tqdm(range(250), ncols= 70):
-            sess.run(train.up)
-        step = sess.run(train.step)
+for _ in range(3): # 2 epochs
+    for _ in range(200):
+        for _ in tqdm(range(500), ncols= 70):
+            sess.run(model.down)
+        step = sess.run(model.step)
         summ(step)
     saver.save(sess, pform(P.ckpt, C.trial, step // 100000), write_meta_graph= False)
-    save_txt(pform(P.pred, C.trial, step // 100000), trans(src_valid))

@@ -2,7 +2,7 @@ from util import Record
 
 
 config = Record(
-    trial  = 'smsm-samsam_'
+    trial  = 'm1_'
     , ckpt = None
     , seed = 0
     ### data
@@ -22,7 +22,7 @@ config = Record(
 
 
 paths = Record(
-    log = "~/cache/tensorboard-logdir/eti"
+    log = "~/cache/tensorboard-logdir/multi"
     , raw = "../data"
     , pred = "../trial/pred"
     , ckpt = "../trial/ckpt"

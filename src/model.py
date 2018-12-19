@@ -227,10 +227,10 @@ class Model(Record):
     infer = model.data( ... ).infer( ... )
 
     """
-    _new = 'dim_emb', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap', 'eos', 'bos'
+    _new = 'dim_emb', 'dim_mid', 'dim_voc', 'cap', 'eos', 'bos'
 
     @staticmethod
-    def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, bos):
+    def new(dim_emb, dim_mid, dim_voc, cap, eos, bos):
         """-> Model with fields
 
            logit : Embed
@@ -241,26 +241,24 @@ class Model(Record):
 
         """
         assert not dim_emb % 2
-        emb_src = Embed(dim_emb, dim_src, name= 'emb_src')
-        emb_tgt = Embed(dim_emb, dim_tgt, name= 'emb_tgt')
+        embeds = tuple(Embed(dim_emb, dim_voc, name= "embed{}".format(i)) for i in range(5))
+        logits = tuple(embed.transpose(name= "logit{}".format(i)) for i, embed in enumerate(embeds))
         return Model(
-            logit= emb_tgt.transpose(name= 'logit')
+            embeds= embeds, logits= logits
             , decode= Decode(dim_emb, name= 'decode')
             , encode= Encode(dim_emb, name= 'encode')
-            , emb_tgt= emb_tgt
-            , emb_src= emb_src
             , dim_emb= dim_emb
-            , dim_tgt= dim_tgt
+            , dim_voc= dim_voc
             , bos= bos
             , eos= eos
             , cap= cap + 1)
 
-    def data(self, src= None, tgt= None):
+    def data(self, sid, tid, src= None, tgt= None):
         """-> Model with new fields
 
         position : Sinusoid
-            src_ : i32 (b, ?)    source feed, in range `[0, dim_src)`
-            tgt_ : i32 (b, ?)    target feed, in range `[0, dim_tgt)`
+            src_ : i32 (b, ?)    source feed, in range `[0, dim_voc)`
+            tgt_ : i32 (b, ?)    target feed, in range `[0, dim_voc)`
              src : i32 (b, s)    source with `eos` trimmed among the batch
              tgt : i32 (b, t)    target with `eos` trimmed among the batch, padded with `bos`
             gold : i32 (b, t)    target one step ahead, padded with `eos`
@@ -292,6 +290,9 @@ class Model(Record):
             , src_= src_, mask_src= mask_src, src= src
             , tgt_= tgt_, mask_tgt= mask_tgt, tgt= tgt
             , gold= gold, mask_arr= mask_arr
+            , emb_src = self.embeds[sid]
+            , emb_tgt = self.embeds[tid]
+            , logit   = self.logits[tid]
             , **self)
 
     def infer(self, minimal= True):
@@ -339,8 +340,8 @@ class Model(Record):
     def valid(self, dropout= identity, smooth= None):
         """-> Model with new fields, teacher forcing
 
-          output : f32 (b, t, dim_tgt) prediction on logit scale
-            prob : f32 (b, t, dim_tgt) prediction, soft
+          output : f32 (b, t, dim_voc) prediction on logit scale
+            prob : f32 (b, t, dim_voc) prediction, soft
             pred : i32 (b, t)          prediction, hard
             loss : f32 ()              prediction loss
             errt : f32 ()              error rate
@@ -370,14 +371,14 @@ class Model(Record):
         along with all the fields from `valid`
 
         """
-        dropout, smooth = Dropout(dropout, (None, self.dim_emb, None)), Smooth(smooth, self.dim_tgt)
+        dropout, smooth = Dropout(dropout, (None, self.dim_emb, None)), Smooth(smooth, self.dim_voc)
         self = self.valid(dropout= dropout, smooth= smooth)
         with scope('lr'):
             s = tf.train.get_or_create_global_step()
             t = tf.to_float(s + 1)
             lr = (self.dim_emb ** -0.5) * tf.minimum(t ** -0.5, t * (warmup ** -1.5))
-        up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
-        return Model(self, dropout= dropout, smooth= smooth, step= s, lr= lr, up= up)
+        # up = tf.train.AdamOptimizer(lr, beta1, beta2, epsilon).minimize(self.loss, s)
+        return Model(self, dropout= dropout, smooth= smooth, step= s, lr= lr)
 
 
 def batch_run(sess, model, fetch, src, tgt= None, batch= None):

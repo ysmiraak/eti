@@ -23,12 +23,12 @@ evaluation
 
 number of instances in each corpus
 
-| lang |     raw | cleaned |
-|------+---------+---------|
-| da   | 1968800 | 1829268 |
-| de   | 1920209 | 1769992 |
-| sv   | 1862234 | 1746479 |
-| nl   | 1997775 | 1842970 |
+| lang |     raw | cleaned | eval | valid |   train |
+|------+---------+---------+------+-------+---------|
+| da   | 1968800 | 1829268 | 4096 |  1024 | 1824148 |
+| de   | 1920209 | 1769992 | 4096 |  1024 | 1764872 |
+| sv   | 1862234 | 1746479 | 4096 |  1024 | 1741359 |
+| nl   | 1997775 | 1842970 | 4096 |  2048 | 1836826 |
 
 - consider instances with the same english translation
 - ignore duplicate instances
