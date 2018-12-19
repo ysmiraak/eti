@@ -1,37 +1,36 @@
-* trial
+* idea
 
-** n
+- 5 germanic languages : en da de sv nl
+- parallel corpora between en and the other 4
 
-without masking current step
+training
 
-if the other steps offer no valuable info,
-current step should simply trust in itself.
+- model 0: between en and nl
+- model 1: between en and da de sv
+- model 2: between en and nl, from model 1
+- model 3: between en and nl, from model 1, train embedding only
 
-*** conclusion
+evaluation
 
-the mask is useful
+- bleu scores between en da de sv     ; for model 1
+- bleu scores between nl and da de sv ; for model 2 3
+- bleu scores between en and nl       ; for model 0 2 3
 
-the model does not learn as well without the mask
+* data
 
-** o
+- sentencepiece unigram vocabulary model, one for each lang
+- remove pairs with sentences longer than 64 pieces
 
-use the big dataset on the server /data/wmt/de-en
+number of instances in each corpus
 
-** s
+| lang |     raw | cleaned |
+|------+---------+---------|
+| da   | 1968800 | 1829268 |
+| de   | 1920209 | 1769992 |
+| sv   | 1862234 | 1746479 |
+| nl   | 1997775 | 1842970 |
 
-straight branch
-
-* todo
-
-investigate the cause for indecisiveness of middle steps
-
-** try use emb_pos as position encoding
-
-probably doesn't make sense
-but it may help coordinating tgt and src
-
-** try without dropout on emb_pos
-
-when and where should we apply dropout?
-
-** try convolution with self-attention
+- consider instances with the same english translation
+- ignore duplicate instances
+- 1275006 shared unique instances
+- randomly split 4096 instances for evaluation

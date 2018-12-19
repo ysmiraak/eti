@@ -2,7 +2,7 @@ from util import Record
 
 
 config = Record(
-    trial  = 'c3sc3sc3-c3sac3sc3asc3_'
+    trial  = 'smsm-samsam_'
     , ckpt = None
     , seed = 0
     ### data
@@ -11,11 +11,9 @@ config = Record(
     , bos = 2
     , cap = 64
     ### model
-    , dim_src = 8192
-    , dim_tgt = 8192
+    , dim_voc = 8192
     , dim_emb = 512
     , dim_mid = 2048
-    , depth   = 2
     ### batch
     , batch_train = 64
     , batch_valid = 256
