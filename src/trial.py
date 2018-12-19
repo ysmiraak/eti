@@ -22,7 +22,7 @@ config = Record(
 
 
 paths = Record(
-    log = "~/cache/tensorboard-logdir/multi"
+    log = "~/cache/tensorboard-logdir/kuan"
     , raw = "../data"
     , pred = "../trial/pred"
     , ckpt = "../trial/ckpt"
