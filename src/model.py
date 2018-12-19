@@ -127,14 +127,14 @@ class Encode(Record):
             self.blocks = GluBlock(dim, 'c1-1') \
                 ,         GluBlock(dim, 'c1-2') \
                 ,         GluBlock(dim, 'c1-3') \
-                ,         AttBlock(dim, 's1') \
+                ,         AttBlock(dim, 's1'  ) \
                 ,         GluBlock(dim, 'c2-1') \
                 ,         GluBlock(dim, 'c2-2') \
                 ,         GluBlock(dim, 'c2-3') \
-                ,         AttBlock(dim, 's2') \
+                ,         AttBlock(dim, 's2'  ) \
                 ,         GluBlock(dim, 'c3-1') \
                 ,         GluBlock(dim, 'c3-2') \
-                ,         GluBlock(dim, 'c3-3') \
+                ,         GluBlock(dim, 'c3-3')
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):
