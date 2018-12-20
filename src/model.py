@@ -127,7 +127,15 @@ class Encode(Record):
             self.blocks = AttBlock(dim, 's1') \
                 ,         MlpBlock(dim, 'm1') \
                 ,         AttBlock(dim, 's2') \
-                ,         MlpBlock(dim, 'm2')
+                ,         MlpBlock(dim, 'm2') \
+                # ,         AttBlock(dim, 's3') \
+                # ,         MlpBlock(dim, 'm3') \
+                # ,         AttBlock(dim, 's4') \
+                # ,         MlpBlock(dim, 'm4') \
+                # ,         AttBlock(dim, 's5') \
+                # ,         MlpBlock(dim, 'm5') \
+                # ,         AttBlock(dim, 's6') \
+                # ,         MlpBlock(dim, 'm6') \
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):
@@ -150,7 +158,19 @@ class Decode(Record):
                 ,         MlpBlock(dim, 'm1') \
                 ,         AttBlock(dim, 's2') \
                 ,         AttBlock(dim, 'a2') \
-                ,         MlpBlock(dim, 'm2')
+                ,         MlpBlock(dim, 'm2') \
+                # ,         AttBlock(dim, 's3') \
+                # ,         AttBlock(dim, 'a3') \
+                # ,         MlpBlock(dim, 'm3') \
+                # ,         AttBlock(dim, 's4') \
+                # ,         AttBlock(dim, 'a4') \
+                # ,         MlpBlock(dim, 'm4') \
+                # ,         AttBlock(dim, 's5') \
+                # ,         AttBlock(dim, 'a5') \
+                # ,         MlpBlock(dim, 'm5') \
+                # ,         AttBlock(dim, 's6') \
+                # ,         AttBlock(dim, 'a6') \
+                # ,         MlpBlock(dim, 'm6') \
 
     def __call__(self, x, m, w, n, dropout, name= None):
         with scope(name or self.name):

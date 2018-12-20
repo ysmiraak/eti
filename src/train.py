@@ -34,7 +34,7 @@ def batch_valid(src, tgt, size= 256):
         for i, j in partition(1024, size):
             yield src[i:j], tgt[i:j]
 
-def batch_train(src, tgt, size= 12):
+def batch_train(src, tgt, size= 18):
     assert len(src) == len(tgt)
     for i in batch_sample(len(src), size):
         yield src[i], tgt[i]
@@ -96,7 +96,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-for _ in range(3): # 2 epochs
+for _ in range(9): # 1 epoch per round
     for _ in range(200):
         for _ in tqdm(range(500), ncols= 70):
             sess.run(model.down)
