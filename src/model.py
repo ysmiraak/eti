@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Multilayer, Attention
+from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -37,6 +37,20 @@ class Sinusoid(Record):
             return sinusoid(self.dim, time) if self.pos is None else self.pos[:,:time]
 
 
+class MlpBlock(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.lin  = Conv(4*dim, dim, init= 'vso2', name= 'lin')
+            self.lex  = Conv(dim, 4*dim, init= 'vso1', name= 'lex')
+            self.norm = Normalize(dim)
+
+    def __call__(self, x, dropout, name= None):
+        with scope(name or self.name):
+            return self.norm(x + dropout(self.lex(tf.nn.relu(self.lin(x)))))
+
+
 class AttBlock(Record):
 
     def __init__(self, dim, name):
@@ -50,39 +64,6 @@ class AttBlock(Record):
             return self.norm(x + dropout(self.att(x, v, m)))
 
 
-class GluBlock(Record):
-
-    def __init__(self, dim, name, mid= 128, depth= 2):
-        self.name = name
-        with scope(name):
-            self.ante =       Conv(mid, dim, shape= (1,), init= 'vso1', name= 'ante')
-            self.gate = tuple(Conv(mid, mid, shape= (2,), init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
-            self.conv = tuple(Conv(mid, mid, shape= (2,), init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
-            self.post =       Conv(dim, mid, shape= (1,), init= 'vso1', name= 'post')
-            self.norm = Normalize(dim, name= 'norm')
-
-    def __call__(self, x, dropout, name= None):
-        with scope(name or self.name):
-            y = self.ante(x)
-            for gate, conv in zip(self.gate, self.conv):
-                y = tf.pad(y, ((0,0),(0,0),(1,0)))
-                y = tf.sigmoid(gate(y)) * conv(y)
-            return self.norm(x + dropout(self.post(y)))
-
-
-class MlpBlock(Record):
-
-    def __init__(self, dim, name):
-        self.name = name
-        with scope(name):
-            self.mlp = Multilayer(dim, dim, 2048)
-            self.norm = Normalize(dim)
-
-    def __call__(self, x, dropout, name= None):
-        with scope(name or self.name):
-            return self.norm(x + dropout(self.mlp(x)))
-
-
 class Encode(Record):
 
     def __init__(self, dim, name):
@@ -91,7 +72,15 @@ class Encode(Record):
             self.blocks = AttBlock(dim, 's1') \
                 ,         MlpBlock(dim, 'm1') \
                 ,         AttBlock(dim, 's2') \
-                ,         MlpBlock(dim, 'm2')
+                ,         MlpBlock(dim, 'm2') \
+                ,         AttBlock(dim, 's3') \
+                ,         MlpBlock(dim, 'm3') \
+                ,         AttBlock(dim, 's4') \
+                ,         MlpBlock(dim, 'm4') \
+                ,         AttBlock(dim, 's5') \
+                ,         MlpBlock(dim, 'm5') \
+                ,         AttBlock(dim, 's6') \
+                ,         MlpBlock(dim, 'm6')
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):
@@ -114,13 +103,26 @@ class Decode(Record):
                 ,         MlpBlock(dim, 'm1') \
                 ,         AttBlock(dim, 's2') \
                 ,         AttBlock(dim, 'a2') \
-                ,         MlpBlock(dim, 'm2')
+                ,         MlpBlock(dim, 'm2') \
+                ,         AttBlock(dim, 's3') \
+                ,         AttBlock(dim, 'a3') \
+                ,         MlpBlock(dim, 'm3') \
+                ,         AttBlock(dim, 's4') \
+                ,         AttBlock(dim, 'a4') \
+                ,         MlpBlock(dim, 'm4') \
+                ,         AttBlock(dim, 's5') \
+                ,         AttBlock(dim, 'a5') \
+                ,         MlpBlock(dim, 'm5') \
+                ,         AttBlock(dim, 's6') \
+                ,         AttBlock(dim, 'a6') \
+                ,         MlpBlock(dim, 'm6')
 
     def __call__(self, x, m, w, n, dropout, name= None):
         with scope(name or self.name):
             for block in self.blocks:
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
+                elif 'b' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, w, n, dropout)
                 elif 's' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, dropout)
                 elif 'a' == btype: x = block(x, w, n, dropout)
                 elif 'm' == btype: x = block(x, dropout)
@@ -133,7 +135,7 @@ class Decode(Record):
             btype = block.name[0]
             if 'c' == btype:
                 for conv in block.conv:
-                    s, n, _ = conv.kern.shape.as_list()
+                    s, n, _ = conv.shape()
                     try:
                         c, c_shape = sn2cs[(s, n)]
                     except KeyError:
@@ -141,6 +143,7 @@ class Decode(Record):
                         sn2cs[(s, d)] = c, c_shape
                     cs.append(c)
                     cs_shape.append(c_shape)
+            elif 'b' == btype: j += 1
             elif 's' == btype: j += 1
             else: pass
         return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 1), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
@@ -153,12 +156,23 @@ class Decode(Record):
                 if 'c' == btype:
                     with scope(block.name):
                         d = block.ante(x)
-                        for gate, conv in zip(block.gate, block.conv):
-                            ds.append(d)
-                            c, i = cs[i], i + 1
-                            d = tf.concat((c, d), axis= -1, name= 'cache_c')
-                            d = tf.sigmoid(gate(d)) * conv(d)
+                        if hasattr(block, 'gate'):
+                            for gate, conv in zip(block.gate, block.conv):
+                                c, i = cs[i], i + 1
+                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                ds.append(d[:,:,1:])
+                                d = tf.sigmoid(gate(d)) * conv(d)
+                        else:
+                            for conv in block.conv:
+                                c, i = cs[i], i + 1
+                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
+                                ds.append(d[:,:,1:])
+                                d = tf.nn.relu(conv(d))
                         x = block.norm(x + dropout(block.post(d)))
+                elif 'b' == btype:
+                    v, j = vs[j], j + 1
+                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    x = block(x, v, None, w, n, dropout)
                 elif 's' == btype:
                     v, j = vs[j], j + 1
                     us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
@@ -178,10 +192,10 @@ class Model(Record):
     infer = model.data( ... ).infer( ... )
 
     """
-    _new = 'dim_emb', 'dim_mid', 'depth', 'dim_src', 'dim_tgt', 'cap', 'eos', 'bos'
+    _new = 'dim_emb', 'dim_mid', 'dim_src', 'dim_tgt', 'cap', 'eos', 'bos'
 
     @staticmethod
-    def new(dim_emb, dim_mid, depth, dim_src, dim_tgt, cap, eos, bos):
+    def new(dim_emb, dim_mid, dim_src, dim_tgt, cap, eos, bos):
         """-> Model with fields
 
            logit : Embed

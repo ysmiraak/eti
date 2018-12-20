@@ -87,7 +87,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
 def trans(sents, model= infer):
     if not isinstance(sents, np.ndarray):
         sents = encode(vocab_src, sents, C.cap, np.int32)
-    for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_valid):
+    for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_infer):
         yield from decode(vocab_tgt, preds)
 
 for _ in range(2):
