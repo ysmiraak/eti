@@ -246,6 +246,10 @@ hopefully that can be replaced with convolution as well.
 | c3sc3sc3-c3ac3sc3ac3sc3 | 33.4 | 34.5 |
 | c3sc3sc3-c3sc3ac3sc3ac3 | 33.3 | 34.6 |
 
+the 0.1 improvement for =smsm-samsam= in comparison to previous results
+was due to the addition of an output transformation in attention blocks,
+which was stated in the original transformer paper but i missed it.
+
 * complexity
 
 | b | 128 | bottleneck dimension |
