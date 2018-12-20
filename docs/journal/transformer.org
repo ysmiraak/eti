@@ -172,7 +172,7 @@ hopefully that can be replaced with convolution as well.
 - conv dimensions around 128 is optimal, 64 works as well, 32 is too small, 256 too large
 - non-linearity is more important than more convolution
 
-| arch                  |    1 |    2 | conv block                         |    n |       f |
+| arch                  | 100k | 200k | conv block                         |    b |       k |
 |-----------------------+------+------+------------------------------------+------+---------|
 | smsm-samsam           | 32.5 | 33.6 |                                    |      |         |
 | c6-samsam             | 31.4 | 32.3 | ante      conv relu conv relu post |  128 |       3 |
@@ -204,7 +204,7 @@ hopefully that can be replaced with convolution as well.
 - dropout only necessary for each block
 - twin gates \(g \times y + (1-g) \times x\) don't work, make no changes to glu for now
 
-| arch                       |    1 |    2 | n |   d |
+| arch                       | 100k | 200k | k |   b |
 |----------------------------+------+------+---+-----|
 | csm-samsam                 | 33.0 | 33.8 | 4 | 128 |
 | csm-samsam_half            | 33.0 | 33.6 | 4 |  64 |
@@ -233,7 +233,7 @@ hopefully that can be replaced with convolution as well.
 
 ** decoder
 
-| arch                    |    1 |    2 |
+| arch                    | 100k | 200k |
 |-------------------------+------+------|
 | smsm-samsam             | 32.6 | 33.7 |
 | c3sc3sc3-c3bc3bc3       | 33.0 | 33.8 |
