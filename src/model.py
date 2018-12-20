@@ -75,8 +75,8 @@ class Encode(Record):
                 ,         MlpBlock(dim, 'm2') \
                 ,         AttBlock(dim, 's3') \
                 ,         MlpBlock(dim, 'm3') \
-                ,         AttBlock(dim, 's4') \
-                ,         MlpBlock(dim, 'm4') \
+                # ,         AttBlock(dim, 's4') \
+                # ,         MlpBlock(dim, 'm4') \
                 # ,         AttBlock(dim, 's5') \
                 # ,         MlpBlock(dim, 'm5') \
                 # ,         AttBlock(dim, 's6') \
@@ -107,9 +107,9 @@ class Decode(Record):
                 ,         AttBlock(dim, 's3') \
                 ,         AttBlock(dim, 'a3') \
                 ,         MlpBlock(dim, 'm3') \
-                ,         AttBlock(dim, 's4') \
-                ,         AttBlock(dim, 'a4') \
-                ,         MlpBlock(dim, 'm4') \
+                # ,         AttBlock(dim, 's4') \
+                # ,         AttBlock(dim, 'a4') \
+                # ,         MlpBlock(dim, 'm4') \
                 # ,         AttBlock(dim, 's5') \
                 # ,         AttBlock(dim, 'a5') \
                 # ,         MlpBlock(dim, 'm5') \
