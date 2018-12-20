@@ -90,7 +90,7 @@ def trans(sents, model= infer):
     for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_infer):
         yield from decode(vocab_tgt, preds)
 
-for _ in range(2):
+for _ in range(1):
     for _ in range(400):
         for _ in tqdm(range(250), ncols= 70):
             sess.run(train.up)
