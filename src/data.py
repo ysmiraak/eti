@@ -1,10 +1,108 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
+from itertools import product
 from trial import config as C, paths as P, train as T
+from util import partial
 from util_io import pform, load_txt, save_txt
 from util_np import np, vpack
 from util_sp import spm, load_spm, encode
+
+corp2pairs = {corp: tuple(zip(
+      map(str.strip, load_txt(pform(P.raw, "europarl-v7.{}-en.{}".format(corp, corp))))
+    , map(str.strip, load_txt(pform(P.raw, "europarl-v7.{}-en.en".format(corp))))))
+              for corp in ('da', 'de', 'sv', 'nl')}
+
+sent2class = defaultdict(set)
+for corp, pairs in corp2pairs.items():
+    for s, t in pairs:
+        s = s, corp
+        t = t, 'en'
+        c = set.union(sent2class[s], sent2class[t])
+        c.add(s)
+        c.add(t)
+        sent2class[s] = c
+        sent2class[t] = c
+
+classes = set(map(frozenset, sent2class.values()))
+del sent2class
+
+lang2sents = defaultdict(list)
+for cls in classes:
+    l2s = defaultdict(list)
+    for sent, lang in cls: l2s[lang].append(sent)
+    if len(l2s) < 5: continue
+    langs = tuple(l2s)
+    for sents in product(*[l2s[lang] for lang in langs]):
+        for lang, sent in zip(langs, sents):
+            lang2sents[lang].append(sent)
+
+for lang, sents in lang2sents.items():
+    save_txt(pform(P.data, lang), sents)
+
+
+
+
+
+
+
+
+
+
+
+
+da_da = tuple()
+de_de = tuple(load_txt(pform(P.raw, "europarl-v7.de-en.de")))
+sv_sv = tuple(load_txt(pform(P.raw, "europarl-v7.sv-en.sv")))
+nl_nl = tuple(load_txt(pform(P.raw, "europarl-v7.nl-en.nl")))
+
+da_en = tuple(load_txt(pform(P.raw, "europarl-v7.da-en.en")))
+de_en = tuple(load_txt(pform(P.raw, "europarl-v7.de-en.en")))
+sv_en = tuple(load_txt(pform(P.raw, "europarl-v7.sv-en.en")))
+nl_en = tuple(load_txt(pform(P.raw, "europarl-v7.nl-en.en")))
+
+en2lang2ids = defaultdict(partial(defaultdict, list))
+for i, s in enumerate(da_en): en2lang2ids[s]['da'].append(i)
+for i, s in enumerate(de_en): en2lang2ids[s]['de'].append(i)
+for i, s in enumerate(sv_en): en2lang2ids[s]['sv'].append(i)
+for i, s in enumerate(nl_en): en2lang2ids[s]['nl'].append(i)
+en2lang2ids_shared = {s: lang2ids for s, lang2ids in en2lang2ids.items() if 4 == len(lang2ids)}
+
+en, da, de, sv, nl = [], [], [], [], []
+for s, lang2ids in en2lang2ids_shared.items():
+    # da_ids = lang2ids['da']
+    # de_ids = lang2ids['de']
+    # sv_ids = lang2ids['sv']
+    # nl_ids = lang2ids['nl']
+    en.append(s)
+    da.append(sorted([da_da[i] for i in lang2ids['da']], key= len)[0])
+    de.append(sorted([de_de[i] for i in lang2ids['de']], key= len)[0])
+    sv.append(sorted([sv_sv[i] for i in lang2ids['sv']], key= len)[0])
+    nl.append(sorted([nl_nl[i] for i in lang2ids['nl']], key= len)[0])
+
+    # da = {da_da[i] for i in da_ids}
+    # de = {de_de[i] for i in de_ids}
+    # sv = {sv_sv[i] for i in sv_ids}
+    # nl = {nl_nl[i] for i in nl_ids}
+    # if 1 < len(da): en2lang2blah[s]['da'] = da
+    # if 1 < len(de): en2lang2blah[s]['de'] = de
+    # if 1 < len(sv): en2lang2blah[s]['sv'] = sv
+    # if 1 < len(nl): en2lang2blah[s]['nl'] = nl
+
+
+    # m = min(len(da_ids), len(de_ids), len(sv_ids), len(nl_ids))
+    # for _ in   range(m): en.append(s)
+    # for i in da_ids[:m]: da.append(da_da[i])
+    # for i in de_ids[:m]: de.append(de_de[i])
+    # for i in sv_ids[:m]: sv.append(sv_sv[i])
+    # for i in nl_ids[:m]: nl.append(nl_nl[i])
+
+
+
+
+
+
+
 
 # train one spm for each lang
 vocab_da = spm(pform(P.data, "vocab_da"), pform(P.raw, "europarl-v7.da-en.da"), C.dim_voc, C.bos, C.eos, C.unk)
