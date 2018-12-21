@@ -1,71 +1,43 @@
 #!/usr/bin/env python3
 
+from itertools import permutations, chain
 from model import Model, batch_run
 from tqdm import tqdm
 from trial import config as C, paths as P, train as T
-from util import partial, select
+from util import partial, comp, select
 from util_io import pform, load_txt, save_txt
 from util_np import np, partition, batch_sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
+C.trial = 'm1_'
+
 #############
 # load data #
 #############
 
-valid_da_da = np.load(pform(P.data, "valid_da_da.npy"))
-valid_da_en = np.load(pform(P.data, "valid_da_en.npy"))
-valid_de_de = np.load(pform(P.data, "valid_de_de.npy"))
-valid_de_en = np.load(pform(P.data, "valid_de_en.npy"))
-valid_sv_en = np.load(pform(P.data, "valid_sv_en.npy"))
-valid_sv_sv = np.load(pform(P.data, "valid_sv_sv.npy"))
+valid_en, train_en = np.load(pform(P.data, "valid_en.npy")), np.load(pform(P.data, "train_en.npy"))
+# valid_nl, train_nl = np.load(pform(P.data, "valid_nl.npy")), np.load(pform(P.data, "train_nl.npy"))
+valid_de, train_de = np.load(pform(P.data, "valid_de.npy")), np.load(pform(P.data, "train_de.npy"))
+# valid_da, train_da = np.load(pform(P.data, "valid_da.npy")), np.load(pform(P.data, "train_da.npy"))
+valid_sv, train_sv = np.load(pform(P.data, "valid_sv.npy")), np.load(pform(P.data, "train_sv.npy"))
 
-train_da_da = np.load(pform(P.data, "train_da_da.npy"))
-train_da_en = np.load(pform(P.data, "train_da_en.npy"))
-train_de_de = np.load(pform(P.data, "train_de_de.npy"))
-train_de_en = np.load(pform(P.data, "train_de_en.npy"))
-train_sv_en = np.load(pform(P.data, "train_sv_en.npy"))
-train_sv_sv = np.load(pform(P.data, "train_sv_sv.npy"))
+perm = comp(tuple, partial(permutations, r= 2))
+data_index = perm((0, 2, 4))
+data_valid = perm((valid_en, valid_de, valid_sv))
+data_train = perm((train_en, train_de, train_sv))
 
-def batch_valid(src, tgt, size= 256):
-    assert 1024 == len(src) == len(tgt)
-    while True:
-        for i, j in partition(1024, size):
-            yield src[i:j], tgt[i:j]
-
-def batch_train(src, tgt, size= 18):
-    assert len(src) == len(tgt)
-    for i in batch_sample(len(src), size):
-        yield src[i], tgt[i]
+batch = lambda src, tgt: (src[i], tgt[i] for i in batch_sample(len(src), C.batch_train // len(data_train)))
+data_train = tuple(pipe(partial(batch, src, tgt), (tf.int32, tf.int32), prefetch= 16) for src, tgt in data_train)
 
 ###############
 # build model #
 ###############
 
 model = Model.new(**select(C, *Model._new))
-
-da_da, da_en = pipe(partial(batch_valid, valid_da_da, valid_da_en), (tf.int32, tf.int32), prefetch= 4)
-de_de, de_en = pipe(partial(batch_valid, valid_de_de, valid_de_en), (tf.int32, tf.int32), prefetch= 4)
-sv_sv, sv_en = pipe(partial(batch_valid, valid_sv_sv, valid_sv_en), (tf.int32, tf.int32), prefetch= 4)
-
-valid = model.data(1, 0, da_da, da_en).valid() \
-    ,   model.data(2, 0, de_de, de_en).valid() \
-    ,   model.data(3, 0, sv_sv, sv_en).valid() \
-    ,   model.data(0, 3, sv_en, sv_sv).valid() \
-    ,   model.data(0, 2, de_en, de_de).valid() \
-    ,   model.data(0, 1, da_en, da_da).valid()
-
-da_da, da_en = pipe(partial(batch_train, train_da_da, train_da_en), (tf.int32, tf.int32), prefetch= 16)
-de_de, de_en = pipe(partial(batch_train, train_de_de, train_de_en), (tf.int32, tf.int32), prefetch= 16)
-sv_sv, sv_en = pipe(partial(batch_train, train_sv_sv, train_sv_en), (tf.int32, tf.int32), prefetch= 16)
-
-train = model.data(1, 0, da_da, da_en).train(**T) \
-    ,   model.data(2, 0, de_de, de_en).train(**T) \
-    ,   model.data(3, 0, sv_sv, sv_en).train(**T) \
-    ,   model.data(0, 3, sv_en, sv_sv).train(**T) \
-    ,   model.data(0, 2, de_en, de_de).train(**T) \
-    ,   model.data(0, 1, da_en, da_da).train(**T)
+valid = tuple(model.data(i, j).valid() for i, j in data_index)
+train = tuple(model.data(i, j, s, t).train(**T) for (i, j), (s, t) in zip(data_index, data_train))
 
 model.lr   = train[0].lr
 model.step = train[0].step
@@ -88,15 +60,13 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
              ( tf.summary.scalar('step_errt', model.errt)
              , tf.summary.scalar('step_loss', model.loss)))):
-    errt_loss = []
-    for m in valid:
-        for _ in range(4): # 4 * 256 = 1024
-            errt_loss.append(sess.run((m.errt, m.loss)))
-    errt, loss = map(np.mean, zip(*errt_loss))
+    errt, loss = map(np.mean, zip(*chain(*(
+        batch_run(sess, m, (m.errt, m.loss), s, t, batch= C.batch_valid)
+        for m, (s, t) in zip(valid, data_valid)))))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-for _ in range(9): # 1 epoch per round
+for _ in range(9): # 1.67 epoch per round
     for _ in range(200):
         for _ in tqdm(range(500), ncols= 70):
             sess.run(model.down)

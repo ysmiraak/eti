@@ -2,7 +2,7 @@ from util import Record
 
 
 config = Record(
-    trial  = 'm1_'
+    trial  = None
     , ckpt = None
     , seed = 0
     ### data
@@ -15,9 +15,9 @@ config = Record(
     , dim_emb = 512
     , dim_mid = 2048
     ### batch
-    , batch_train = 64
-    , batch_valid = 256
-    , total_valid = 4096
+    , batch_train = 128
+    , batch_infer = 256
+    , batch_valid = 512
 )
 
 
