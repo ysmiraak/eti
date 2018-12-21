@@ -28,7 +28,7 @@ data_index = perm((0, 2, 4))
 data_valid = perm((valid_en, valid_de, valid_sv))
 data_train = perm((train_en, train_de, train_sv))
 
-batch = lambda src, tgt: (src[i], tgt[i] for i in batch_sample(len(src), C.batch_train // len(data_train)))
+batch = lambda src, tgt: ((src[i], tgt[i]) for i in batch_sample(len(src), C.batch_train // len(data_train)))
 data_train = tuple(pipe(partial(batch, src, tgt), (tf.int32, tf.int32), prefetch= 16) for src, tgt in data_train)
 
 ###############
