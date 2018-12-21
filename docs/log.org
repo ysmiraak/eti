@@ -1,46 +1,34 @@
 * idea
 
-- 5 germanic languages : en da de sv nl
+- 5 germanic languages : en nl de da sv
 - parallel corpora between en and the other 4
 
 training
 
-- model 0: between en and nl
-- model 1: between en and da de sv
-- model 2: between en and nl, from model 1
-- model 3: between en and nl, from model 1, train embedding only
+- model 0: between nl da
+- model 1: between en de sv
+- model 2: between nl da, from model 1
+- model 3: between nl da, from model 1, train embedding only
 
 evaluation
 
-- bleu scores between en da de sv     ; for model 1
-- bleu scores between nl and da de sv ; for model 2 3
-- bleu scores between en and nl       ; for model 0 2 3
+- bleu scores between nl da          ; for model 0
+- bleu scores between en de sv       ; for model 1
+- bleu scores between en nl de da sv ; for model 2 3
 
 * data
 
-- sentencepiece unigram vocabulary model, one for each lang
-- remove pairs with sentences longer than 64 pieces
+number of non-empty instances in each corpus
 
-number of instances in each corpus
+| nl | 1978745 |
+| de | 1908920 |
+| da | 1949685 |
+| sv | 1848423 |
 
-| lang |     raw | cleaned | eval | valid |   train |
-|------+---------+---------+------+-------+---------|
-| da   | 1968800 | 1829268 | 4096 |  1024 | 1824148 |
-| de   | 1920209 | 1769992 | 4096 |  1024 | 1764872 |
-| sv   | 1862234 | 1746479 | 4096 |  1024 | 1741359 |
-| nl   | 1997775 | 1842970 | 4096 |  2048 | 1836826 |
+- partition all sentences in 5 corpora into equivalence classes
+- take the classes which cover all languages (1390396) uniquely (1381977)
 
-- consider instances with the same english translation
-- ignore duplicate instances
-- 1275006 shared unique instances
-- randomly split 4096 instances for evaluation
-
-for model 1
-
-- randomly split 1024 instances from each corpus for validation
-- 1024 * 3 * 2 = 6144 validation instances in total
-
-for model 0 2 3
-
-- randomly split 2048 instances from nl for validation
-- 2048 * 2 = 4096 validation instances in total
+- sentencepiece unigram vocabulary model, one for each language
+- take instances with all sentences within 64 pieces (1259953)
+- randomly pick instances with unique sentences for evaluation (4096) and validation (1024)
+- 1254833 training instances
