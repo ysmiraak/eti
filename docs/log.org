@@ -30,5 +30,5 @@ number of non-empty instances in each corpus
 
 - sentencepiece unigram vocabulary model, one for each language
 - take instances with all sentences within 64 pieces (1259953)
-- randomly pick instances with unique sentences for evaluation (4096) and validation (1024)
+- randomly split 4096 instances for evaluation and 1024 for validation
 - 1254833 training instances
