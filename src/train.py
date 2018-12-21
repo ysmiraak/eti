@@ -67,8 +67,8 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.flush()
 
 for _ in range(9): # 1.67 epoch per round
-    for _ in range(200):
-        for _ in tqdm(range(500), ncols= 70):
+    for _ in range(250):
+        for _ in tqdm(range(400), ncols= 70):
             sess.run(model.down)
         step = sess.run(model.step)
         summ(step)
