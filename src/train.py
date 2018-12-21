@@ -23,17 +23,19 @@ valid_de, train_de = np.load(pform(P.data, "valid_de.npy")), np.load(pform(P.dat
 # valid_da, train_da = np.load(pform(P.data, "valid_da.npy")), np.load(pform(P.data, "train_da.npy"))
 valid_sv, train_sv = np.load(pform(P.data, "valid_sv.npy")), np.load(pform(P.data, "train_sv.npy"))
 
-perm = comp(tuple, partial(permutations, r= 2))
-data_index = perm((0, 2, 4))
-data_valid = perm((valid_en, valid_de, valid_sv))
-data_train = perm((train_en, train_de, train_sv))
+data_index =        0,        2,        4
+data_valid = valid_en, valid_de, valid_sv
+data_train = train_en, train_de, train_sv
 
-data_train = tuple(
-    pipe(lambda: ((src[i], tgt[i])
-                  for i in batch_sample(len(src), C.batch_train // len(data_train), seed))
-         , (tf.int32, tf.int32)
-         , prefetch= 16)
-    for seed, (src, tgt) in enumerate(data_train))
+def batch(arrs, size= C.batch_train, seed= C.seed):
+    size //= len(arrs) * (len(arrs) - 1)
+    for i in batch_sample(len(arrs[0]), size, seed):
+        yield tuple(arr[i] for arr in arrs)
+
+perm = comp(tuple, partial(permutations, r= 2))
+data_index = perm(data_index)
+data_valid = perm(data_valid)
+data_train = perm(pipe(partial(batch, data_train), (tf.int32,)*len(data_train), prefetch= 16))
 
 ###############
 # build model #
@@ -70,7 +72,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-for _ in range(9): # 1.67 epoch per round
+for _ in range(9): # ~4 epoch per round
     for _ in range(250):
         for _ in tqdm(range(400), ncols= 70):
             sess.run(model.down)
