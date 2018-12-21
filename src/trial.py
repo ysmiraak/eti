@@ -16,9 +16,9 @@ config = Record(
     , dim_emb = 512
     , dim_mid = 2048
     ### batch
-    , batch_train = 64
-    , batch_infer = 128
-    , batch_valid = 256
+    , batch_train = 128
+    , batch_infer = 256
+    , batch_valid = 512
     , total_valid = 4096
 )
 

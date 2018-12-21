@@ -4,8 +4,8 @@ from model import Model, batch_run
 from tqdm import tqdm
 from trial import config as C, paths as P, train as T
 from util import partial, select
-from util_io import pform, load_txt, save_txt, load_pkl
-from util_np import np, vpack, sample
+from util_io import pform, load_txt, save_txt
+from util_np import np, vpack, sample, batch_sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
@@ -19,26 +19,32 @@ vocab_tgt = load_spm(pform(P.data, "vocab_tgt.model"))
 src_valid = np.load(pform(P.data, "valid_src.npy"))
 tgt_valid = np.load(pform(P.data, "valid_tgt.npy"))
 
-def batch(batch= C.batch_train
-          , seed= C.seed
-          , vocab_src= vocab_src, path_src= pform(P.data, "train_src.txt")
-          , vocab_tgt= vocab_tgt, path_tgt= pform(P.data, "train_tgt.txt")
-          , eos= C.eos
-          , cap= C.cap):
-    src, tgt = tuple(load_txt(path_src)), tuple(load_txt(path_tgt))
-    bas, bat = [], []
-    for i in sample(len(src), seed):
-        if batch == len(bas):
-            yield vpack(bas, (batch, cap), eos, np.int32) \
-                , vpack(bat, (batch, cap), eos, np.int32)
-            bas, bat = [], []
-        # s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
-        # t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
-        s = vocab_src.encode_as_ids(src[i])
-        t = vocab_tgt.encode_as_ids(tgt[i])
-        if 0 < len(s) <= cap and 0 < len(t) <= cap:
-            bas.append(s)
-            bat.append(t)
+# def batch(batch= C.batch_train
+#           , seed= C.seed
+#           , vocab_src= vocab_src, path_src= pform(P.data, "train_src.txt")
+#           , vocab_tgt= vocab_tgt, path_tgt= pform(P.data, "train_tgt.txt")
+#           , eos= C.eos
+#           , cap= C.cap):
+#     src, tgt = tuple(load_txt(path_src)), tuple(load_txt(path_tgt))
+#     bas, bat = [], []
+#     for i in sample(len(src), seed):
+#         if batch == len(bas):
+#             yield vpack(bas, (batch, cap), eos, np.int32) \
+#                 , vpack(bat, (batch, cap), eos, np.int32)
+#             bas, bat = [], []
+#         # s = vocab_src.sample_encode_as_ids(src[i], -1, 0.1)
+#         # t = vocab_tgt.sample_encode_as_ids(tgt[i], -1, 0.1)
+#         s = vocab_src.encode_as_ids(src[i])
+#         t = vocab_tgt.encode_as_ids(tgt[i])
+#         if 0 < len(s) <= cap and 0 < len(t) <= cap:
+#             bas.append(s)
+#             bat.append(t)
+
+def batch( size= C.batch_train
+          , src= np.load(pform(P.data, "train_src.npy"))
+          , tgt= np.load(pform(P.data, "train_tgt.npy"))):
+    for i in batch_sample(len(src), size):
+        yield src[i], tgt[i]
 
 ###############
 # build model #
@@ -90,9 +96,9 @@ def trans(sents, model= infer):
     for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_infer):
         yield from decode(vocab_tgt, preds)
 
-for _ in range(1):
-    for _ in range(400):
-        for _ in tqdm(range(250), ncols= 70):
+for _ in range(2):
+    for _ in range(250):
+        for _ in tqdm(range(400), ncols= 70):
             sess.run(train.up)
         step = sess.run(train.step)
         summ(step)
