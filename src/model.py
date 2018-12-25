@@ -141,7 +141,7 @@ class Encode(Record):
             for block in self.blocks:
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
-                elif 's' == btype: x = block(x, x, m, dropout)
+                elif 's' == btype: x = block(x, tf.pad(x, ((0,0),(0,0),(1,0))), m, dropout)
                 elif 'm' == btype: x = block(x, dropout)
                 else: raise TypeError('unknown encode block')
             return x
@@ -296,7 +296,7 @@ class Model(Record):
             with scope('max_src'): max_src = tf.reduce_max(len_src)
             src = src_[:,:max_src]
         with scope('mask_arr'): mask_arr = tf.log(tf.expand_dims(tf.to_float(not_eos[:,:max_src]), axis= 1))
-        with scope('mask_src'): mask_src = mask_arr + tf.log(1.0 - tf.eye(max_src))
+        with scope('mask_src'): mask_src = tf.pad(mask_arr + tf.log(1.0 - tf.eye(max_src)), ((0,0),(0,0),(1,0)))
         with scope('tgt'):
             with scope('not_eos'): not_eos = tf.not_equal(tgt_, self.eos)
             with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
