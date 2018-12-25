@@ -64,6 +64,60 @@ class AttBlock(Record):
             return self.norm(x + dropout(self.att(x, v, m)))
 
 
+class BiattBlock(Record):
+
+    def __init__(self, dim, name):
+        self.name = name
+        with scope(name):
+            self.latt  = Attention(dim, name= 'latt')
+            self.ratt  = Attention(dim, name= 'ratt')
+            self.norm = Normalize(dim)
+
+    def __call__(self, x, v, m, w, n, dropout, name= None):
+        with scope(name or self.name):
+            return self.norm(tf.add_n(((dropout(self.latt(x, v, m)), x, dropout(self.ratt(x, w, n))))))
+
+
+class GluBlock(Record):
+
+    def __init__(self, dim, name, mid= 128, depth= 2):
+        self.name = name
+        with scope(name):
+            self.ante =       Conv(mid, dim, size= 1, init= 'vso1', name= 'ante')
+            self.gate = tuple(Conv(mid, mid, size= 2, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, size= 2, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, size= 1, init= 'vso1', name= 'post')
+            self.norm = Normalize(dim, name= 'norm')
+
+    def __call__(self, x, dropout, name= None):
+        with scope(name or self.name):
+            y = self.ante(x)
+            for gate, conv in zip(self.gate, self.conv):
+                y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
+                y = tf.sigmoid(gate(y)) * conv(y)
+            return self.norm(x + dropout(self.post(y)))
+
+
+class SepBlock(Record):
+
+    def __init__(self, dim, name, size= 5, depth= 2):
+        self.name = name
+        with scope(name):
+            self.ante =          Conv(dim, dim, size=    1, init= 'vso1', name= 'ante')
+            self.gate = tuple(SepConv(dim, dim, size= size, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(SepConv(dim, dim, size= size, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =          Conv(dim, dim, size=    1, init= 'vso1', name= 'post')
+            self.norm = Normalize(dim, name= 'norm')
+
+    def __call__(self, x, dropout, name= None):
+        with scope(name or self.name):
+            y = self.ante(x)
+            for gate, conv in zip(self.gate, self.conv):
+                y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
+                y = tf.sigmoid(gate(y)) * conv(y)
+            return self.norm(x + dropout(self.post(y)))
+
+
 class Encode(Record):
 
     def __init__(self, dim, name):
@@ -237,20 +291,21 @@ class Model(Record):
         src_ = placeholder(tf.int32, (None, None), src, 'src_')
         tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
         with scope('src'):
-            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(src_, self.eos))
-            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
-            not_eos = tf.expand_dims(not_eos[:,:len_src], axis= 1)
-            src = src_[:,:len_src]
-        with scope('mask_src'): mask_src = tf.log(not_eos + (1.0 - tf.eye(len_src)))
-        with scope('mask_arr'): mask_arr = tf.log(not_eos)
+            with scope('not_eos'): not_eos = tf.not_equal(src_, self.eos)
+            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
+            with scope('max_src'): max_src = tf.reduce_max(len_src)
+            src = src_[:,:max_src]
+        with scope('mask_arr'): mask_arr = tf.log(tf.expand_dims(tf.to_float(not_eos[:,:max_src]), axis= 1))
+        with scope('mask_src'): mask_src = mask_arr + tf.log(1.0 - tf.eye(max_src))
         with scope('tgt'):
-            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(tgt_, self.eos))
-            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
-            tgt = tgt_[:,:len_tgt]
+            with scope('not_eos'): not_eos = tf.not_equal(tgt_, self.eos)
+            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
+            with scope('max_tgt'): max_tgt = tf.reduce_max(len_tgt)
+            tgt = tgt_[:,:max_tgt]
             gold = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
             tgt  = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
         with scope('mask_tgt'): mask_tgt = tf.log(tf.expand_dims(
-                tf.linalg.LinearOperatorLowerTriangular(tf.ones((len_tgt + 1,) * 2)).to_dense()
+                tf.linalg.LinearOperatorLowerTriangular(tf.ones((max_tgt + 1,) * 2)).to_dense()
                 , axis= 0))
         return Model(
             position= Sinusoid(self.dim_emb, self.cap)
