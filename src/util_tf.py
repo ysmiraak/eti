@@ -119,11 +119,11 @@ class Embed(Record):
             if x.dtype.is_integer:
                 return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
             else:
-                n , m = self.kern.shape.as_list()
+                n , m = self.logit.shape.as_list()
                 shape = tf.shape(x)
                 b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
                 assert n == d
-                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, n)) @ self.kern, (b, t, m))
+                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, n)) @ self.logit, (b, t, m))
 
 
 class Conv(Record):

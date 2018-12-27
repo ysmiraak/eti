@@ -224,7 +224,8 @@ class Decode(Record):
                         x = block.norm(x + dropout(block.post(d)))
                 elif 'b' == btype:
                     v, j = vs[j], j + 1
-                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    v = tf.concat((v, x), axis= -1, name= 'cache_v')
+                    us.append(v)
                     x = block(x, v, None, w, n, dropout)
                 elif 's' == btype:
                     v, j = vs[j], j + 1
