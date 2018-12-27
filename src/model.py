@@ -12,8 +12,7 @@ def sinusoid(dim, time, freq= 1e-4, array= False):
     assert not dim % 2
     if array:
         a = (freq ** ((2 / dim) * np.arange(dim // 2))).reshape(-1, 1) @ (1 + np.arange(time).reshape(1, -1))
-        return np.concatenate((np.sin(a), np.cos(a)), -1).reshape(dim, time) \
-            * (dim ** -0.5)
+        return np.concatenate((np.sin(a), np.cos(a)), -1).reshape(dim, time)
     else:
         assert False # figure out a better way to do this
         a = tf.reshape(
@@ -42,8 +41,8 @@ class MlpBlock(Record):
     def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.lin  = Conv(4*dim, dim, init= 'vso2', name= 'lin')
-            self.lex  = Conv(dim, 4*dim, init= 'vso1', name= 'lex')
+            self.lin  = Conv(4*dim, dim, name= 'lin')
+            self.lex  = Conv(dim, 4*dim, name= 'lex')
             self.norm = Normalize(dim)
 
     def __call__(self, x, dropout, name= None):
@@ -69,8 +68,8 @@ class BiattBlock(Record):
     def __init__(self, dim, name):
         self.name = name
         with scope(name):
-            self.latt  = Attention(dim, name= 'latt')
-            self.ratt  = Attention(dim, name= 'ratt')
+            self.latt = Attention(dim, name= 'latt')
+            self.ratt = Attention(dim, name= 'ratt')
             self.norm = Normalize(dim)
 
     def __call__(self, x, v, m, w, n, dropout, name= None):
@@ -83,10 +82,10 @@ class GluBlock(Record):
     def __init__(self, dim, name, mid= 128, depth= 2):
         self.name = name
         with scope(name):
-            self.ante =       Conv(mid, dim, size= 1, init= 'vso1', name= 'ante')
-            self.gate = tuple(Conv(mid, mid, size= 2, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
-            self.conv = tuple(Conv(mid, mid, size= 2, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
-            self.post =       Conv(dim, mid, size= 1, init= 'vso1', name= 'post')
+            self.ante =       Conv(mid, dim, size= 1, name= 'ante')
+            self.gate = tuple(Conv(mid, mid, size= 2, name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(Conv(mid, mid, size= 2, name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =       Conv(dim, mid, size= 1, name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
@@ -100,22 +99,21 @@ class GluBlock(Record):
 
 class SepBlock(Record):
 
-    def __init__(self, dim, name, size= 2, depth= 1):
+    def __init__(self, dim, name, size= 5, depth= 2):
         self.name = name
         with scope(name):
-            self.ante = self.post = identity
-            # self.gate = tuple(SepConv(dim, dim, size= size, init= 'vso1', name= "gate{}".format(1+i)) for i in range(depth))
-            self.conv = tuple(SepConv(dim, dim, size= size, init= 'vso2', name= "conv{}".format(1+i)) for i in range(depth))
+            self.ante =          Conv(dim, dim, size=    1, name= 'ante')
+            self.gate = tuple(SepConv(dim, dim, size= size, name= "gate{}".format(1+i)) for i in range(depth))
+            self.conv = tuple(SepConv(dim, dim, size= size, name= "conv{}".format(1+i)) for i in range(depth))
+            self.post =          Conv(dim, dim, size=    1, name= 'post')
             self.norm = Normalize(dim, name= 'norm')
 
     def __call__(self, x, dropout, name= None):
         with scope(name or self.name):
             y = self.ante(x)
-            # for gate, conv in zip(self.gate, self.conv):
-            #     y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
-            #     y = tf.sigmoid(gate(y)) * conv(y)
-            for conv in self.conv:
-                y = tf.nn.relu(conv(tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))))
+            for gate, conv in zip(self.gate, self.conv):
+                y = tf.pad(y, ((0,0),(0,0),(conv.shape()[0]-1,0)))
+                y = tf.sigmoid(gate(y)) * conv(y)
             return self.norm(x + dropout(self.post(y)))
 
 
@@ -135,7 +133,7 @@ class Encode(Record):
                 # ,         AttBlock(dim, 's5') \
                 # ,         MlpBlock(dim, 'm5') \
                 # ,         AttBlock(dim, 's6') \
-                # ,         MlpBlock(dim, 'm6') \
+                # ,         MlpBlock(dim, 'm6')
 
     def __call__(self, x, m, dropout, name= None):
         with scope(name or self.name):
@@ -170,15 +168,15 @@ class Decode(Record):
                 # ,         MlpBlock(dim, 'm5') \
                 # ,         AttBlock(dim, 's6') \
                 # ,         AttBlock(dim, 'a6') \
-                # ,         MlpBlock(dim, 'm6') \
+                # ,         MlpBlock(dim, 'm6')
 
     def __call__(self, x, m, w, n, dropout, name= None):
         with scope(name or self.name):
             for block in self.blocks:
                 btype = block.name[0]
                 if   'c' == btype: x = block(x, dropout)
-                elif 'b' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, w, n, dropout)
-                elif 's' == btype: x = block(x, tf.pad(x[:,:,:-1], ((0,0),(0,0),(1,0))), m, dropout)
+                elif 'b' == btype: x = block(x, x, m, w, n, dropout)
+                elif 's' == btype: x = block(x, x, m, dropout)
                 elif 'a' == btype: x = block(x, w, n, dropout)
                 elif 'm' == btype: x = block(x, dropout)
                 else: raise TypeError('unknown decode block')
@@ -201,7 +199,7 @@ class Decode(Record):
             elif 'b' == btype: j += 1
             elif 's' == btype: j += 1
             else: pass
-        return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 1), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
+        return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 0), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
 
     def autoreg(self, x, cs, vs, w, n, dropout, name= None):
         with scope(name or self.name):
@@ -226,11 +224,13 @@ class Decode(Record):
                         x = block.norm(x + dropout(block.post(d)))
                 elif 'b' == btype:
                     v, j = vs[j], j + 1
-                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    v = tf.concat((v, x), axis= -1, name= 'cache_v')
+                    us.append(v)
                     x = block(x, v, None, w, n, dropout)
                 elif 's' == btype:
                     v, j = vs[j], j + 1
-                    us.append(tf.concat((v, x), axis= -1, name= 'cache_v'))
+                    v = tf.concat((v, x), axis= -1, name= 'cache_v')
+                    us.append(v)
                     x = block(x, v, None, dropout)
                 elif 'a' == btype: x = block(x, w, n, dropout)
                 elif 'm' == btype: x = block(x, dropout)
@@ -253,7 +253,6 @@ class Model(Record):
     def new(dim_emb, dim_mid, dim_voc, cap, eos, bos):
         """-> Model with fields
 
-           logit : Embed
           decode : Decode
           encode : Encode
          emb_tgt : Embed
@@ -261,10 +260,8 @@ class Model(Record):
 
         """
         assert not dim_emb % 2
-        embeds = tuple(Embed(dim_emb, dim_voc, name= "embed{}".format(i)) for i in range(5))
-        logits = tuple(embed.transpose(name= "logit{}".format(i)) for i, embed in enumerate(embeds))
         return Model(
-            embeds= embeds, logits= logits
+              embeds = tuple(Embed(dim_emb, dim_voc, name= "embed{}".format(i)) for i in range(5))
             , decode= Decode(dim_emb, name= 'decode')
             , encode= Encode(dim_emb, name= 'encode')
             , dim_emb= dim_emb
@@ -290,20 +287,21 @@ class Model(Record):
         src_ = placeholder(tf.int32, (None, None), src, 'src_')
         tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
         with scope('src'):
-            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(src_, self.eos))
-            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
-            not_eos = tf.expand_dims(not_eos[:,:len_src], axis= 1)
-            src = src_[:,:len_src]
-        with scope('mask_src'): mask_src = tf.log(not_eos + (1.0 - tf.eye(len_src)))
-        with scope('mask_arr'): mask_arr = tf.log(not_eos)
+            with scope('not_eos'): not_eos = tf.not_equal(src_, self.eos)
+            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
+            with scope('max_src'): max_src = tf.reduce_max(len_src)
+            src = src_[:,:max_src]
+        with scope('mask_arr'): mask_arr = tf.log(tf.expand_dims(tf.to_float(not_eos[:,:max_src]), axis= 1))
+        with scope('mask_src'): mask_src = mask_arr
         with scope('tgt'):
-            with scope('not_eos'): not_eos = tf.to_float(tf.not_equal(tgt_, self.eos))
-            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(0.0 < tf.reduce_sum(not_eos, axis= 0)))
-            tgt = tgt_[:,:len_tgt]
+            with scope('not_eos'): not_eos = tf.not_equal(tgt_, self.eos)
+            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
+            with scope('max_tgt'): max_tgt = tf.reduce_max(len_tgt)
+            tgt = tgt_[:,:max_tgt]
             gold = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
             tgt  = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
         with scope('mask_tgt'): mask_tgt = tf.log(tf.expand_dims(
-                tf.linalg.LinearOperatorLowerTriangular(tf.ones((len_tgt + 1,) * 2)).to_dense()
+                tf.linalg.LinearOperatorLowerTriangular(tf.ones((max_tgt + 1,) * 2)).to_dense()
                 , axis= 0))
         return Model(
             position= Sinusoid(self.dim_emb, self.cap)
@@ -312,7 +310,6 @@ class Model(Record):
             , gold= gold, mask_arr= mask_arr
             , emb_src = self.embeds[sid]
             , emb_tgt = self.embeds[tid]
-            , logit   = self.logits[tid]
             , **self)
 
     def infer(self, minimal= True):
@@ -334,14 +331,14 @@ class Model(Record):
                 p, p_shape = x[:,1:], tf.TensorShape((None, None))
                 cs, cs_shape, vs, vs_shape = self.decode.cache_init(b, self.dim_emb)
             def body(i, x, p, cs, vs):
-                # i : ()                time step from 0 to t
-                # x : (b,          1)   x_i
-                # p : (b,          i)   predictions
-                # c : (b,     128, 1)   convolution value
-                # v : (b, dim_emb, 1+i) attention values
+                # i : ()              time step from 0 to t
+                # x : (b,          1) x_i
+                # p : (b,          i) predictions
+                # c : (b,     128, 1) convolution value
+                # v : (b, dim_emb, i) attention values
                 with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
                 x, cs, vs = self.decode.autoreg(x, cs, vs, w, self.mask_arr, dropout)
-                x = self.logit(x)
+                x = self.emb_tgt(x, name= 'logit')
                 x = tf.argmax(x, axis= -1, output_type= tf.int32, name= 'pred')
                 p = tf.concat((p, x), axis= -1, name= 'cache_p')
                 return i + 1, x, p, cs, vs
@@ -371,7 +368,7 @@ class Model(Record):
         with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
         w = self.encode(w, self.mask_src,                   dropout, name= 'encode_')
         x = self.decode(x, self.mask_tgt, w, self.mask_arr, dropout, name= 'decode_')
-        y = self.logit(x, name= 'logit_')
+        y = self.emb_tgt(x, name= 'logit_')
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
         with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.gold, pred)))

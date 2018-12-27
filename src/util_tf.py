@@ -1,4 +1,3 @@
-from copy import copy
 from util import Record
 import tensorflow as tf
 
@@ -37,11 +36,10 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
-def variable(name, shape, init, initializers=
+def variable(name, shape, init= 'rand', initializers=
              {  'zero': tf.initializers.zeros()
               , 'unit': tf.initializers.ones()
-              , 'vso1': tf.variance_scaling_initializer(1.0, 'fan_out', 'uniform')
-              , 'vso2': tf.variance_scaling_initializer(2.0, 'fan_out', 'uniform')
+              , 'rand': tf.glorot_uniform_initializer()
              }):
     """wraps `tf.get_variable` to provide initializer based on usage"""
     return tf.get_variable(name, shape, initializer= initializers.get(init, init))
@@ -53,8 +51,8 @@ class Normalize(Record):
     def __init__(self, dim, name= 'normalize'):
         self.name = name
         with scope(name):
-            self.gain = variable('gain', (1, dim, 1), 'unit')
-            self.bias = variable('bias', (1, dim, 1), 'zero')
+            self.gain = variable('gain', (1, dim, 1), init= 'unit')
+            self.bias = variable('bias', (1, dim, 1), init= 'zero')
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
@@ -106,31 +104,26 @@ class Embed(Record):
     """input and output embedding
 
     i32 (b, t)    -> f32 (b, n, t)
-    f32 (b, m, t) -> f32 (b, t, n)
+    f32 (b, n, t) -> f32 (b, t, m)
 
     """
 
     def __init__(self, n, m, name= 'embed'):
         self.name = name
-        with scope(name): self.kern = variable('kern', (m, n), 'vso1')
+        with scope(name):
+            self.logit = variable('kern', (n, m))
+            self.embed = tf.transpose(self.logit) * (n ** 0.5)
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
             if x.dtype.is_integer:
-                return tf.transpose(tf.gather(self.kern, x), (0, 2, 1))
+                return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
             else:
-                m , n = self.kern.shape.as_list()
+                n , m = self.logit.shape.as_list()
                 shape = tf.shape(x)
                 b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
-                assert m == d
-                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, m)) @ self.kern, (b, t, n))
-
-    def transpose(self, name= None):
-        m, n = self.kern.shape.as_list()
-        self = copy(self)
-        self.name = name or self.name
-        with scope(self.name): self.kern = tf.transpose(self.kern) * ((n / m) ** 0.5)
-        return self
+                assert n == d
+                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, n)) @ self.logit, (b, t, m))
 
 
 class Conv(Record):
@@ -140,11 +133,11 @@ class Conv(Record):
 
     """
 
-    def __init__(self, n, m= None, size= 1, init= 'vso1', name= 'conv'):
+    def __init__(self, n, m= None, size= 1, name= 'conv'):
         if m is None: m = n
         self.name = name
         with scope(name):
-            self.kern = variable('kern', (size, m, n), init)
+            self.kern = variable('kern', (size, m, n))
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
@@ -157,12 +150,12 @@ class Conv(Record):
 class SepConv(Record):
     """separable convolution from `m` to `n` channels"""
 
-    def __init__(self, n, m= None, size= 2, init= 'vso2', name= 'conv'):
+    def __init__(self, n, m= None, size= 2, name= 'conv'):
         if m is None: m = n
         self.name = name
         with scope(name):
-            self.kern_depthwise = variable('kern_depthwise', (1, size, m, 1), 'vso1')
-            self.kern_pointwise = variable('kern_pointwise', (1,    1, m, n),  init )
+            self.kern_depthwise = variable('kern_depthwise', (1, size, m, 1))
+            self.kern_pointwise = variable('kern_pointwise', (1,    1, m, n))
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
