@@ -200,7 +200,7 @@ class Attention(Record):
     """
 
     def __init__(self, dim, d_q= None, d_v= None, head= 8, name= 'attention'):
-        assert not self.dim % head
+        assert not dim % head
         if d_q is None: d_q = dim
         if d_v is None: d_v = dim
         self.dim = dim
