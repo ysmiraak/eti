@@ -1,6 +1,6 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, SepConv, Attention
+from util_tf import tf, scope, placeholder, trim, Normalize, Smooth, Dropout, Embed, Conv, SepConv, Attention
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -280,35 +280,29 @@ class Model(Record):
              src : i32 (b, s)    source with `eos` trimmed among the batch
              tgt : i32 (b, t)    target with `eos` trimmed among the batch, padded with `bos`
             gold : i32 (b, t)    target one step ahead, padded with `eos`
+            mask : b8  (b, t)    target sequence mask
         mask_tgt : f32 (1, t, t) target mask
-        mask_arr : f32 (b, 1, s) bridge mask
-        mask_src : f32 (b, s, s) source mask
+        mask_src : f32 (b, 1, s) source mask
 
         """
         src_ = placeholder(tf.int32, (None, None), src, 'src_')
         tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
         with scope('src'):
-            with scope('not_eos'): not_eos = tf.not_equal(src_, self.eos)
-            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
-            with scope('max_src'): max_src = tf.reduce_max(len_src)
-            src = src_[:,:max_src]
-        with scope('mask_arr'): mask_arr = tf.log(tf.expand_dims(tf.to_float(not_eos[:,:max_src]), axis= 1))
-        with scope('mask_src'): mask_src = mask_arr
+            src, msk = trim(src_, self.eos)
+            mask_src = tf.log(tf.expand_dims(tf.to_float(msk), axis= 1))
         with scope('tgt'):
-            with scope('not_eos'): not_eos = tf.not_equal(tgt_, self.eos)
-            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
-            with scope('max_tgt'): max_tgt = tf.reduce_max(len_tgt)
-            tgt = tgt_[:,:max_tgt]
+            tgt, msk = trim(tgt_, self.eos)
+            mask = tf.pad(msk, ((0,0),(1,0)), constant_values= True)
+            lead = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
             gold = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
-            tgt  = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
-        with scope('mask_tgt'): mask_tgt = tf.log(tf.expand_dims(
-                tf.linalg.LinearOperatorLowerTriangular(tf.ones((max_tgt + 1,) * 2)).to_dense()
+            mask_tgt = tf.log(tf.expand_dims(
+                tf.linalg.LinearOperatorLowerTriangular(tf.ones((tf.shape(lead)[1],)*2)).to_dense()
                 , axis= 0))
         return Model(
             position= Sinusoid(self.dim_emb, self.cap)
             , src_= src_, mask_src= mask_src, src= src
-            , tgt_= tgt_, mask_tgt= mask_tgt, tgt= tgt
-            , gold= gold, mask_arr= mask_arr
+            , tgt_= tgt_, mask_tgt= mask_tgt, tgt= lead
+            , gold= gold, mask= mask
             , **self)
 
     def infer(self, minimal= True):
@@ -336,7 +330,7 @@ class Model(Record):
                 # c : (b,     128, 1) convolution value
                 # v : (b, dim_emb, i) attention values
                 with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
-                x, cs, vs = self.decode.autoreg(x, cs, vs, w, self.mask_arr, dropout)
+                x, cs, vs = self.decode.autoreg(x, cs, vs, w, self.mask_src, dropout)
                 x = self.emb_tgt(x, name= 'logit')
                 x = tf.argmax(x, axis= -1, output_type= tf.int32, name= 'pred')
                 p = tf.concat((p, x), axis= -1, name= 'cache_p')
@@ -366,7 +360,7 @@ class Model(Record):
         with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
         with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
         w = self.encode(w, self.mask_src,                   dropout, name= 'encode_')
-        x = self.decode(x, self.mask_tgt, w, self.mask_arr, dropout, name= 'decode_')
+        x = self.decode(x, self.mask_tgt, w, self.mask_src, dropout, name= 'decode_')
         y = self.emb_tgt(x, name= 'logit_')
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)

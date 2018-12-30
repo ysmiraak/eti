@@ -36,6 +36,25 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
+def trim(x, eos, name= 'trim'):
+    """returns the trimmed sequence tensor and the sequence mask
+
+    x   : tensor int32 (b, ?)
+    eos : tensor int32 ()
+       -> tensor int32 (b, t), tensor bool (b, t)
+
+    each row aka sequence in `x` is assumed to be any number of
+    non-eos followed by any number of eos, with `t` being the maximum
+    non-eos sequence length among the batch
+
+    """
+    with scope(name):
+        with scope('not_eos'): not_eos = tf.not_equal(x, eos)
+        with scope('len_seq'): len_seq = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
+        with scope('max_len'): max_len = tf.reduce_max(len_seq)
+        return x[:,:max_len], not_eos[:,:max_len]
+
+
 def get_shape(x, name= 'shape'):
     """returns the shape of `x` as a tuple of integers (static) or int32
     scalar tensors (dynamic)
@@ -114,8 +133,8 @@ class Dropout(Record):
 class Embed(Record):
     """input and output embedding
 
-    i32 (b, t)    -> f32 (b, n, t)
-    f32 (b, n, t) -> f32 (b, t, m)
+    tensor i32 (b, t)    -> tensor f32 (b, n, t)
+    tensor f32 (b, n, t) -> tensor f32 (b, t, m)
 
     """
 

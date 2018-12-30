@@ -97,7 +97,7 @@ def trans(sents, model= infer):
         yield from decode(vocab_tgt, preds)
 
 for _ in range(2):
-    for _ in range(250):
+    for _ in range(250): # ~7.25 epochs
         for _ in tqdm(range(400), ncols= 70):
             sess.run(train.up)
         step = sess.run(train.step)
