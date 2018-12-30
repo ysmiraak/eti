@@ -36,6 +36,17 @@ def placeholder(dtype, shape, x= None, name= None):
     return tf.placeholder_with_default(x, shape, name)
 
 
+def get_shape(x, name= 'shape'):
+    """returns the shape of `x` as a tuple of integers (static) or int32
+    scalar tensors (dynamic)
+
+    """
+    with scope(name):
+        shape = tf.shape(x)
+        shape = tuple(d if d is not None else shape[i] for i, d in enumerate(x.shape.as_list()))
+        return shape
+
+
 def variable(name, shape, init= 'rand', initializers=
              {  'zero': tf.initializers.zeros()
               , 'unit': tf.initializers.ones()
@@ -94,9 +105,9 @@ class Dropout(Record):
 
     def __call__(self, x, name= None):
         with scope(name or self.name):
+            shape = get_shape(x)
             if self.shape is not None:
-                shape = tf.shape(x)
-                shape = [s or shape[i] for i, s in enumerate(self.shape)]
+                shape = [d or shape[i] for i, d in enumerate(self.shape)]
             return tf.nn.dropout(x, self.keep, shape)
 
 
@@ -119,9 +130,8 @@ class Embed(Record):
             if x.dtype.is_integer:
                 return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
             else:
-                n , m = self.logit.shape.as_list()
-                shape = tf.shape(x)
-                b,d,t = (d.value or shape[i] for i, d in enumerate(x.shape))
+                n , m = get_shape(self.logit)
+                b,d,t = get_shape(x)
                 assert n == d
                 return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, n)) @ self.logit, (b, t, m))
 
@@ -144,7 +154,7 @@ class Conv(Record):
             return tf.nn.convolution(x, self.kern, padding= 'VALID', data_format= 'NCW')
 
     def shape(self):
-        return tuple(self.kern.shape.as_list())
+        return get_shape(self.kern)
 
 
 class SepConv(Record):
@@ -170,8 +180,8 @@ class SepConv(Record):
                 , axis= 2)
 
     def shape(self):
-        _, s, _, _ = self.kern_depthwise.shape.as_list()
-        _, _, m, n = self.kern_pointwise.shape.as_list()
+        _, s, _, _ = get_shape(self.kern_depthwise)
+        _, _, m, n = get_shape(self.kern_pointwise)
         return (s, m, n)
 
 
@@ -189,10 +199,12 @@ class Attention(Record):
 
     """
 
-    def __init__(self, dim, d_q= None, d_v= None, name= 'attention'):
+    def __init__(self, dim, d_q= None, d_v= None, head= 8, name= 'attention'):
+        assert not self.dim % head
         if d_q is None: d_q = dim
         if d_v is None: d_v = dim
         self.dim = dim
+        self.head = head
         self.name = name
         with scope(name):
             self.v = Conv(dim, d_v, name= 'v')
@@ -200,20 +212,21 @@ class Attention(Record):
             self.q = Conv(dim, d_q, name= 'q')
             self.p = Conv(d_q, dim, name= 'p')
 
-    def __call__(self, query, value, mask= None, name= None, head= 8):
-        assert not self.dim % head
+    def __call__(self, query, value, mask= None, name= None):
         with scope(name or self.name):
-            v = self.v(value) # bds <- bvs
-            k = self.k(value) # bds <- bvs
-            q = self.q(query) # bdt <- bqt
-            if 1 < head:
-                v = tf.stack(tf.split(v, head, axis= 1)) # hbcs <- bds
-                k = tf.stack(tf.split(k, head, axis= 1)) # hbcs <- bds
-                q = tf.stack(tf.split(q, head, axis= 1)) # hbct <- bdt
-            a = tf.matmul(q, k, transpose_a= True) # hbts <- (hbtc <- hbct) @ hbcs
-            a *= ((self.dim // head) ** -0.5)
-            if mask is not None: a += mask
+            d,h,c = self.dim, self.head, self.dim // self.head
+            b,_,t = get_shape(query)
+            b,_,s = get_shape(value)
+            # pretransformations
+            v = tf.reshape(self.v(value), (b,h,c,s)) # bhcs <- bds <- bvs
+            k = tf.reshape(self.k(value), (b,h,c,s)) # bhcs <- bds <- bvs
+            q = tf.reshape(self.q(query), (b,h,c,t)) # bhct <- bdt <- bqt
+            # weight
+            a = tf.matmul(q, k, transpose_a= True) # bhts <- (bhtc <- bhct) @ bhcs
+            a *= c ** -0.5
+            if mask is not None: a += tf.expand_dims(mask, axis= 1)
             a = tf.nn.softmax(a, axis= -1)
-            y = tf.matmul(v, a, transpose_b= True) # hbct <- hbcs @ (hbst <- hbts)
-            if 1 < head: y = tf.concat(tf.unstack(y), axis= 1) # bdt <- hbct
-            return self.p(y)
+            # attend
+            y = tf.matmul(v, a, transpose_b= True) # bhct <- bhcs @ (bhst <- bhts)
+            # posttransformation
+            return self.p(tf.reshape(y, (b,d,t))) # bqt <- bdt <- bhct
