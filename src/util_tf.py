@@ -37,22 +37,23 @@ def placeholder(dtype, shape, x= None, name= None):
 
 
 def trim(x, eos, name= 'trim'):
-    """returns the trimmed sequence tensor and the sequence mask
+    """trims a tensor of sequences
 
-    x   : tensor int32 (b, ?)
-    eos : tensor int32 ()
-       -> tensor int32 (b, t), tensor bool (b, t)
+    x   : tensor i32 (b, ?)
+    eos : tensor i32 ()
+       -> tensor i32 (b, t)  the trimmed sequence tensor
+        , tensor b8  (b, t)  the sequence mask
+        , tensor i32 ()      the maximum non-eos sequence length t
 
     each row aka sequence in `x` is assumed to be any number of
-    non-eos followed by any number of eos, with `t` being the maximum
-    non-eos sequence length among the batch
+    non-eos followed by any number of eos
 
     """
     with scope(name):
         with scope('not_eos'): not_eos = tf.not_equal(x, eos)
         with scope('len_seq'): len_seq = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
         with scope('max_len'): max_len = tf.reduce_max(len_seq)
-        return x[:,:max_len], not_eos[:,:max_len]
+        return x[:,:max_len], not_eos[:,:max_len], max_len
 
 
 def get_shape(x, name= 'shape'):
@@ -133,8 +134,8 @@ class Dropout(Record):
 class Embed(Record):
     """input and output embedding
 
-    tensor i32 (b, t)    -> tensor f32 (b, n, t)
-    tensor f32 (b, n, t) -> tensor f32 (b, t, m)
+    tensor i32 (b, t) -> tensor f32 (b, n, t)
+    tensor f32 (?, n) -> tensor f32 (?, m)
 
     """
 
@@ -145,14 +146,12 @@ class Embed(Record):
             self.embed = tf.transpose(self.logit) * (n ** 0.5)
 
     def __call__(self, x, name= None):
+        assert 2 == len(x.shape)
         with scope(name or self.name):
             if x.dtype.is_integer:
                 return tf.transpose(tf.gather(self.embed, x), (0, 2, 1))
             else:
-                n , m = get_shape(self.logit)
-                b,d,t = get_shape(x)
-                assert n == d
-                return tf.reshape(tf.reshape(tf.transpose(x, (0, 2, 1)), (b * t, n)) @ self.logit, (b, t, m))
+                return x @ self.logit
 
 
 class Conv(Record):
