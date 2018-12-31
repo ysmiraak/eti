@@ -1,6 +1,12 @@
 from util import Record, identity
 from util_np import np, partition
-from util_tf import tf, scope, placeholder, Normalize, Smooth, Dropout, Embed, Conv, SepConv, Attention
+from util_tf import tf, scope, placeholder, trim, Normalize, Smooth, Dropout, Embed, Conv, SepConv, Attention
+
+
+def causal_mask(t, name= 'causal_mask'):
+    """returns the causal mask for `t` steps"""
+    with scope(name):
+        return tf.linalg.LinearOperatorLowerTriangular(tf.ones((t, t))).to_dense()
 
 
 def sinusoid(dim, time, freq= 1e-4, array= False):
@@ -182,61 +188,6 @@ class Decode(Record):
                 else: raise TypeError('unknown decode block')
             return x
 
-    def cache_init(self, b, d):
-        sn2cs, cs, cs_shape, j = {}, [], [], 0
-        for block in self.blocks:
-            btype = block.name[0]
-            if 'c' == btype:
-                for conv in block.conv:
-                    s, n, _ = conv.shape()
-                    try:
-                        c, c_shape = sn2cs[(s, n)]
-                    except KeyError:
-                        c, c_shape = tf.zeros((b, n, s-1), name= 'c'), tf.TensorShape((None, n, s-1))
-                        sn2cs[(s, d)] = c, c_shape
-                    cs.append(c)
-                    cs_shape.append(c_shape)
-            elif 'b' == btype: j += 1
-            elif 's' == btype: j += 1
-            else: pass
-        return tuple(cs), tuple(cs_shape), (tf.zeros((b, d, 0), name= 'v'),)*j, (tf.TensorShape((None, d, None)),)*j
-
-    def autoreg(self, x, cs, vs, w, n, dropout, name= None):
-        with scope(name or self.name):
-            i, ds, j, us = 0, [], 0, []
-            for block in self.blocks:
-                btype = block.name[0]
-                if 'c' == btype:
-                    with scope(block.name):
-                        d = block.ante(x)
-                        if hasattr(block, 'gate'):
-                            for gate, conv in zip(block.gate, block.conv):
-                                c, i = cs[i], i + 1
-                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
-                                ds.append(d[:,:,1:])
-                                d = tf.sigmoid(gate(d)) * conv(d)
-                        else:
-                            for conv in block.conv:
-                                c, i = cs[i], i + 1
-                                d = tf.concat((c, d), axis= -1, name= 'cache_c')
-                                ds.append(d[:,:,1:])
-                                d = tf.nn.relu(conv(d))
-                        x = block.norm(x + dropout(block.post(d)))
-                elif 'b' == btype:
-                    v, j = vs[j], j + 1
-                    v = tf.concat((v, x), axis= -1, name= 'cache_v')
-                    us.append(v)
-                    x = block(x, v, None, w, n, dropout)
-                elif 's' == btype:
-                    v, j = vs[j], j + 1
-                    v = tf.concat((v, x), axis= -1, name= 'cache_v')
-                    us.append(v)
-                    x = block(x, v, None, dropout)
-                elif 'a' == btype: x = block(x, w, n, dropout)
-                elif 'm' == btype: x = block(x, dropout)
-                else: raise TypeError('unknown decode block')
-            return x, tuple(ds), tuple(us)
-
 
 class Model(Record):
     """-> Record
@@ -274,108 +225,101 @@ class Model(Record):
         """-> Model with new fields
 
         position : Sinusoid
-            src_ : i32 (b, ?)    source feed, in range `[0, dim_voc)`
-            tgt_ : i32 (b, ?)    target feed, in range `[0, dim_voc)`
-             src : i32 (b, s)    source with `eos` trimmed among the batch
-             tgt : i32 (b, t)    target with `eos` trimmed among the batch, padded with `bos`
-            gold : i32 (b, t)    target one step ahead, padded with `eos`
-        mask_tgt : f32 (1, t, t) target mask
-        mask_arr : f32 (b, 1, s) bridge mask
-        mask_src : f32 (b, s, s) source mask
+            src_ : i32 (b, ?)     source feed, in range `[0, dim_src)`
+            tgt_ : i32 (b, ?)     target feed, in range `[0, dim_tgt)`
+             src : i32 (b, s)     source with `eos` trimmed among the batch
+             tgt : i32 (b, t)     target with `eos` trimmed among the batch, padded with `bos`
+            mask : b8  (b, t)     target sequence mask
+            true : i32 (?,)       target references
+         max_tgt : i32 ()         maximum target length
+         max_src : i32 ()         maximum source length
+        mask_tgt : f32 (1, t, t)  target attention mask
+        mask_src : f32 (b, 1, s)  source attention mask
 
         """
         src_ = placeholder(tf.int32, (None, None), src, 'src_')
         tgt_ = placeholder(tf.int32, (None, None), tgt, 'tgt_')
         with scope('src'):
-            with scope('not_eos'): not_eos = tf.not_equal(src_, self.eos)
-            with scope('len_src'): len_src = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
-            with scope('max_src'): max_src = tf.reduce_max(len_src)
-            src = src_[:,:max_src]
-        with scope('mask_arr'): mask_arr = tf.log(tf.expand_dims(tf.to_float(not_eos[:,:max_src]), axis= 1))
-        with scope('mask_src'): mask_src = mask_arr
+            src, msk, max_src = trim(src_, self.eos)
+            mask_src = tf.log(tf.expand_dims(tf.to_float(msk), axis= 1))
         with scope('tgt'):
-            with scope('not_eos'): not_eos = tf.not_equal(tgt_, self.eos)
-            with scope('len_tgt'): len_tgt = tf.reduce_sum(tf.to_int32(not_eos), axis= 1)
-            with scope('max_tgt'): max_tgt = tf.reduce_max(len_tgt)
-            tgt = tgt_[:,:max_tgt]
-            gold = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
-            tgt  = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
-        with scope('mask_tgt'): mask_tgt = tf.log(tf.expand_dims(
-                tf.linalg.LinearOperatorLowerTriangular(tf.ones((max_tgt + 1,) * 2)).to_dense()
-                , axis= 0))
+            tgt, msk, max_tgt = trim(tgt_, self.eos)
+            mask = tf.pad(msk, ((0,0),(1,0)), constant_values= True)
+            btru = tf.pad(tgt, ((0,0),(1,0)), constant_values= self.bos)
+            true = tf.pad(tgt, ((0,0),(0,1)), constant_values= self.eos)
+            true, tgt = tf.boolean_mask(true, mask), btru
+            max_tgt += 1
+            mask_tgt = tf.log(tf.expand_dims(causal_mask(max_tgt), axis= 0))
         return Model(
             position= Sinusoid(self.dim_emb, self.cap)
-            , src_= src_, mask_src= mask_src, src= src
-            , tgt_= tgt_, mask_tgt= mask_tgt, tgt= tgt
-            , gold= gold, mask_arr= mask_arr
+            , src_= src_, mask_src= mask_src, max_src= max_src, src= src
+            , tgt_= tgt_, mask_tgt= mask_tgt, max_tgt= max_tgt, tgt= tgt
+            , true= true, mask= mask
             , emb_src = self.embeds[sid]
             , emb_tgt = self.embeds[tid]
             , **self)
 
-    def infer(self, minimal= True):
+    def infer(self):
         """-> Model with new fields, autoregressive
 
-        len_tgt : i32 ()     steps to unfold aka t
-           pred : i32 (b, t) prediction, hard
+        len_tgt : i32 ()      steps to unfold aka t
+           pred : i32 (b, t)  prediction, hard
 
         """
         dropout = identity
-        with scope('emb_src_infer'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
-        w = self.encode(w, self.mask_src, dropout, name= 'encode_infer')
-        with scope('decode_infer'):
-            with scope('init'):
-                b,t = tf.shape(w)[0], placeholder(tf.int32, (), self.cap, 't')
-                pos = self.position(t)
-                i = tf.constant(0)
-                x = tf.fill((b, 1), self.bos, 'x')
-                p, p_shape = x[:,1:], tf.TensorShape((None, None))
-                cs, cs_shape, vs, vs_shape = self.decode.cache_init(b, self.dim_emb)
-            def body(i, x, p, cs, vs):
-                # i : ()              time step from 0 to t
-                # x : (b,          1) x_i
-                # p : (b,          i) predictions
-                # c : (b,     128, 1) convolution value
-                # v : (b, dim_emb, i) attention values
-                with scope('emb_tgt'): x = tf.expand_dims(pos[:,i], axis= -1) + self.emb_tgt(x)
-                x, cs, vs = self.decode.autoreg(x, cs, vs, w, self.mask_arr, dropout)
-                x = self.emb_tgt(x, name= 'logit')
-                x = tf.argmax(x, axis= -1, output_type= tf.int32, name= 'pred')
-                p = tf.concat((p, x), axis= -1, name= 'cache_p')
-                return i + 1, x, p, cs, vs
-            def cond(i, x, *_):
-                with scope('cond'):
-                    return ((i < t) & ~ tf.reduce_all(tf.equal(x, self.eos))) if minimal else (i < t)
-            _, _, p, *_ = tf.while_loop(
-                cond, body
-                , (i      , x      , p      , cs      , vs      )
-                , (i.shape, x.shape, p_shape, cs_shape, vs_shape)
-                , back_prop= False
-                , swap_memory= True
-                , name= 'autoreg')
-        return Model(self, len_tgt= t, pred= p)
+        with scope('infer'):
+            with scope('encode'):
+                w = self.position(self.max_src) + self.emb_src(self.src)
+                w = self.encode(w, self.mask_src, dropout) # bds
+            with scope('decode'):
+                cap = placeholder(tf.int32, (), self.cap)
+                msk = tf.log(tf.expand_dims(causal_mask(cap), axis= 0)) # 1tt
+                pos = self.position(cap) # dt
+                i,q = tf.constant(0), tf.zeros_like(self.src[:,:1]) + self.bos
+                def body(i, q):
+                    j = i + 1
+                    x = pos[:,:j] + self.emb_tgt(q) # bdj <- bj
+                    x = self.decode(x, msk[:,:j,:j], w, self.mask_src, dropout) # bdj
+                    p = tf.expand_dims( # b1
+                        tf.argmax( # b
+                            self.emb_tgt( # bn
+                                tf.squeeze( # bd
+                                    x[:,:,-1:] # bd1 <- bdj
+                                    , axis= -1))
+                            , axis= -1, output_type= tf.int32)
+                        , axis= -1)
+                    return j, tf.concat((q, p), axis= -1) # bk <- bj, b1
+                cond = lambda i, q: ((i < cap) & ~ tf.reduce_all(tf.equal(q[:,-1], self.eos)))
+                _, p = tf.while_loop(cond, body, (i, q), back_prop= False, swap_memory= True)
+                pred = p[:,1:]
+        return Model(self, len_tgt= cap, pred= pred)
 
     def valid(self, dropout= identity, smooth= None):
         """-> Model with new fields, teacher forcing
 
-          output : f32 (b, t, dim_voc) prediction on logit scale
-            prob : f32 (b, t, dim_voc) prediction, soft
-            pred : i32 (b, t)          prediction, hard
-            loss : f32 ()              prediction loss
-            errt : f32 ()              error rate
+          output : f32 (b, t, dim_tgt)  prediction on logit scale
+            prob : f32 (b, t, dim_tgt)  prediction, soft
+            pred : i32 (b, t)           prediction, hard
+            loss : f32 ()               prediction loss
+            errt : f32 ()               error rate
 
         """
-        with scope('emb_src_'): w = self.position(tf.shape(self.src)[1]) + dropout(self.emb_src(self.src))
-        with scope('emb_tgt_'): x = self.position(tf.shape(self.tgt)[1]) + dropout(self.emb_tgt(self.tgt))
-        w = self.encode(w, self.mask_src,                   dropout, name= 'encode_')
-        x = self.decode(x, self.mask_tgt, w, self.mask_arr, dropout, name= 'decode_')
-        y = self.emb_tgt(x, name= 'logit_')
+        with scope('emb_src_'): w = self.position(self.max_src) + dropout(self.emb_src(self.src))
+        with scope('emb_tgt_'): x = self.position(self.max_tgt) + dropout(self.emb_tgt(self.tgt))
+        w = self.encode(w, self.mask_src,                   dropout, name= 'encode_') # bds
+        x = self.decode(x, self.mask_tgt, w, self.mask_src, dropout, name= 'decode_') # bdt
+        with scope('logit_'):
+            y = self.emb_tgt( # ?n
+                tf.boolean_mask( # ?d
+                    tf.transpose(x, (0,2,1)) # btd <- bdt
+                    , self.mask))
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
-        with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.gold, pred)))
+        with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.true, pred)))
         with scope('loss_'): loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.gold), logits= y)
+                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.true), logits= y)
                 if smooth else
-                tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.gold, logits= y))
+                tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.true, logits= y))
         return Model(self, output= y, prob= prob, pred= pred, loss= loss, errt= errt)
 
     def train(self, dropout= 0.1, smooth= 0.1, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
