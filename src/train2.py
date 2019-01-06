@@ -56,8 +56,14 @@ model.down = tf.train.AdamOptimizer(model.lr, T.beta1, T.beta2, T.epsilon).minim
 ############
 
 sess = tf.InteractiveSession()
+
+tf.global_variables_initializer().run()
+tf.train.Saver(
+    [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if not ('embed' in v.name and 'Adam' in v.name)]
+).restore(sess, pform(P.ckpt, 'm1_', 9))
+
 saver = tf.train.Saver()
-saver.restore(sess, pform(P.ckpt, 'm1_', 9))
+
 model.step.assign(0).eval()
 
 def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
