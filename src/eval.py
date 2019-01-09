@@ -20,7 +20,7 @@ sents = tuple(encode(voc, load_txt(pform(P.data, "eval_{}.txt".format(lang)))) f
 
 index = tuple(permutations(range(5), 2))
 model = Model.new(**select(C, *Model._new))
-model = tuple(model.data(i, j).valid() for i, j in index)
+model = tuple(model.data(i, j).infer() for i, j in index)
 
 sess = tf.InteractiveSession()
 saver = tf.train.Saver()
