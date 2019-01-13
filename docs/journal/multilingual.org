@@ -1,0 +1,214 @@
+#+TITLE: multilingual
+#+AUTHOR: kuan yu
+
+* background
+
+a one-way bilingual machine translation model translates from the
+source language to the target language.  with the commonly adopted
+encoder-decoder structure, the encoder learns to extract information
+from the source language, and the decoder is a language model for the
+target language conditioned on the encoder outputs.  a naive way to
+apply such models for multilingual translation is to train one model
+for each source-target mapping.  in order to translate between \(n\)
+languages, \(n \times (n-1)\) such models must be trained.  the
+complexity is therefore \(O(n^{2})\).
+
+[[https://arxiv.org/pdf/1601.01073.pdf][firat et al. 2016]] proposed to share the attention mechanism which
+connects the encoder and decoder across all models.  as a result, when
+a new language is added, only a new encoder and a new decoder must be
+trained in order to connect with the encoders and decoder for other
+languages.  the complexity is \(O(n)\).  this also improved the
+performance over one-way translation models, especially with
+low-resource languages.
+
+the newly added language only has to be trained using a parallel
+corpus with another existing language.  the system is able to
+translate between the new language and any other existing languages,
+without ever training on a paired instance.  this is commonly dubbed
+zero-shot translation.
+
+[[https://arxiv.org/pdf/1611.04558.pdf][johnson et al. 2017]] explained the zero-shot translation system from
+google, which adopts a even more aggressive parameter sharing method.
+all parameters are shared, including the embeddings for vocabularies.
+in order for the decoder to determine which language to generate, a
+special =bos= symbol is added to the shared vocabulary for each
+language.  inspection on the sentence embedding space suggests that
+the models learns an interlingua representation.
+
+it's not clear to me how they handled the problem regarding the size
+of the vocabulary.  to model an open vocabulary, they used wordpiece,
+so that rare words can be reconstructed from character ngrams.
+however even the smallest subset of ngrams, namely single characters,
+has over 1 million members, consider the number of unicode code
+points.  performing the input lookup is not a problem.  the embedding
+table can be split and stored distributedly across multiple machines.
+however for the output logit computation, this is obviously not
+feasible even with google's computation power.  i suspect they used
+sampled softmax.
+
+[[https://arxiv.org/pdf/1611.04798.pdf][ha et al. 2016]] proposed to share the encoder and decoder but not the
+vocabulary.  the words are further identified with their language
+origin, and all words are trained together.  in another word, the
+vocabulary in their system is the disjoint union of vocabularies for
+all languages.
+
+[[https://arxiv.org/pdf/1806.06957.pdf][lakew et al. 2018]] investigated the performace of rnn-based
+multilingual translation system and the transformer.  their parameter
+sharing approach is most similar to [[https://arxiv.org/pdf/1611.04558.pdf][johnson et al. 2017]].  they found
+that the transformer delivers the best performing models, and some
+(maybe surprising) findings:
+- multilingual models consistently outperform bilingual models;
+- relatedness of the source and target languages does not play a
+  crucial role when comparing zero-shot and bilingual models.
+
+[[https://arxiv.org/pdf/1809.00252.pdf][sachan et al. 2018]] investigated in details the optimal parameter
+sharing method for a multilingual transformer.  their conclusion is
+that it's best to share the embedding, everything in the encoder, but
+only the key and query transformations in the decoder.
+
+* motivation
+
+a multilingual translation system with shared parameters must be
+trained with batches involving all languges.  usually it's done by
+sampling from the disjoint union of all parallel corpora.  even in
+[[https://arxiv.org/pdf/1601.01073.pdf][firat et al. 2016]] where only the attention mechanism is shared, all
+languages are trained simultaneously.
+
+furthermore, most systems with aggressive parameter sharing share the
+embedding.  this requires us to fix the vocabularies, leaving no room
+for a new language.  on top of that, this violates the [[https://ncatlab.org/nlab/show/Yoneda+lemma][foundamental
+theory behind representation learning]] that structure/meaning is the
+ways an object is related to every other object in the same
+space/language.  consider the word "handy" in german and english.
+even in [[https://arxiv.org/pdf/1611.04798.pdf][ha et al. 2016]] where words are additionally identified by
+their language, the vocabularies are still updated together in the
+logit layer.
+
+consider the situation where an unexpected language is encountered,
+possibly even a pair of unexpected languages, for example when an
+alien civilization sends us a parallel corpus to initialize
+communication.  these models will be difficult to adapt.
+
+i would like to investigate the possibility for a multilingual
+translation system with maximum parameter sharing, which can be
+adapted to new languages without training with all supported
+langauges, and still able to perform zero-shot translation.
+
+the design is a transformer with embeddings parametrized by the
+languages.  as usual, the input embedding and output embedding (the
+logit layer) are shared (transposed and scaled), but a different
+embedding matrix is used for each language.  the majority of the
+parameters (the encoder and the decoder) are trained in a pretraining
+stage with multiple languages simultaneously, which encourages it to
+learn a general encoding-decoding mechanism.  since the only thing
+that allows to model to differentiate those languages are the
+different embedding matrices, it must try to encode all
+language-specific information in the embeddings alone.  and when we
+wish to adapt the model to a new language, we simply add a new
+embedding matrix and update the parameters there to accomodate it into
+the system.
+
+* idea
+
+- 5 germanic languages : en nl de da sv
+- parallel corpora between en and the other 4
+
+training
+
+- model 0: between nl da
+- model 1: between en de sv
+- model 2: between nl da, from model 1
+- model 3: between nl da, from model 1, train embedding only
+
+evaluation
+
+- bleu scores between nl da          ; for model 0
+- bleu scores between en de sv       ; for model 1
+- bleu scores between en nl de da sv ; for model 2 3
+
+interpretation
+
+- m0 is the usual one-way translation baseline
+- m1 is the pretrained model, whose encoding-decoding mechanism is
+  expected to be universal
+- m2 investigates whether
+  + the model m1 can be updated with new languages without forgetting the old ones
+  + the model m0 can benefit from pretraining on related languages
+- m3 is the main interest of investigation, specifically
+  + is it possible for a new pair of languages to adapt to the
+    encoding-decoding mechanism of m1, with only the freedom of
+    updating the embeddings from random initialization
+  + is it possible to perform zero-shot translation this way
+
+* data
+
+number of non-empty instances in each corpus
+
+| nl | 1978745 |
+| de | 1908920 |
+| da | 1949685 |
+| sv | 1848423 |
+
+- partition all sentences in 5 corpora into equivalence classes
+- take the classes which cover all languages (1390396) uniquely (1381977)
+
+- sentencepiece unigram vocabulary model, one for each language
+- take instances with all sentences within 64 pieces (1259953)
+- randomly split 4096 instances for evaluation and 1024 for validation
+- 1254833 training instances
+
+* bleu
+
+evaluated with =sacrebleu -tok intl=
+
+after training each model for ~36 epochs, with batch size 300
+  - 300k steps for m0 m2 m3
+  - 900k steps for m1
+
+| tgt | src |   m0 |   m1 |   m2 |   m3 |
+|-----+-----+------+------+------+------|
+| nl  | en  |  0.0 |  0.0 |  0.2 | 23.3 |
+| en  | nl  |  0.0 |  0.0 |  0.0 | 30.7 |
+| de  | en  |  0.0 | 29.0 |  0.0 | 29.0 |
+| en  | de  |  0.0 | 35.9 |  0.0 | 35.9 |
+| da  | en  |  0.1 |  0.0 |  0.0 | 31.5 |
+| en  | da  |  0.0 |  0.0 |  0.0 | 35.4 |
+| sv  | en  |  0.0 | 36.3 |  0.0 | 36.3 |
+| en  | sv  |  0.0 | 40.1 |  0.0 | 40.1 |
+| de  | nl  |  0.0 |  0.0 |  0.0 | 22.0 |
+| nl  | de  |  0.0 |  0.0 |  0.0 | 22.1 |
+| da  | nl  | 29.8 |  0.0 | 29.4 | 26.3 |
+| nl  | da  | 28.1 |  0.0 | 27.7 | 23.5 |
+| sv  | nl  |  0.0 |  0.0 |  0.0 | 23.7 |
+| nl  | sv  |  0.0 |  0.0 |  0.0 | 21.5 |
+| da  | de  |  0.0 |  0.0 |  0.2 | 26.9 |
+| de  | da  |  0.0 |  0.0 |  0.0 | 23.6 |
+| sv  | de  |  0.0 | 27.9 |  0.0 | 27.9 |
+| de  | sv  |  0.0 | 25.9 |  0.0 | 25.9 |
+| sv  | da  |  0.0 |  0.0 |  0.0 | 29.0 |
+| da  | sv  |  0.1 |  0.0 |  0.1 | 29.8 |
+
+- the ideas regarding m3 are definitely possible, albeit not optimal
+- the model is not capable of retaining it's old knowledge when
+  trained on a new language pair, if we allow all parameters to be
+  updated (m2 vs m1)
+- if we only allow the new embeddings to be updated, obviously the
+  performace of the old pairs won't be affected (m3 vs m1); however
+  the model does not learn as well (3--4 bleu lower, m3 vs m2)
+- surprisingly, pretraining the model even on related languages
+  degrades the performace (m2 vs m0)
+
+* maybe todo
+
+- alignining all corpora is not necessary, i did that to simply the
+  training schedule and evaluation; consider taking english as the
+  common language, and introduce only one new language instead of a
+  pair of new languages; having one language familar to the model in
+  the new training stage may ease the update of the new embedding from
+  randomly initialized values to cooperate better with the trained
+  embedding spaces of the other languages
+- since the 3 languages used for pretraining are related (en de sv),
+  the pretrained model may not be general enough to adapt to new
+  languages, which is to say that the parameters in the encoder and
+  decoder are still language specific; considering pretraining with
+  more diverse languages
