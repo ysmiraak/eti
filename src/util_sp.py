@@ -27,6 +27,7 @@ def spm(name, path, size, bos= -1, eos= -1, unk= 0, coverage= 0.9995):
         --bos_id={bos} \
         --eos_id={eos} \
         --unk_id={unk} \
+        --unk_surface=☹ \
         --character_coverage={coverage}".format(
             coverage= coverage
             , unk= unk
