@@ -3,7 +3,7 @@
 from model import Model, batch_run
 from tqdm import tqdm
 from trial import config as C, paths as P, train as T
-from util import partial, select
+from util import partial, comp, select
 from util_io import pform, load_txt, save_txt
 from util_np import np, vpack, sample, batch_sample
 from util_sp import load_spm, encode, decode
@@ -78,16 +78,16 @@ else:
 
 def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
-             ( tf.summary.scalar('step_loss', valid.loss)
-             , tf.summary.scalar('step_errt', valid.errt)))):
-    loss, errt = map(np.mean, zip(*batch_run(
+             ( tf.summary.scalar('step_errt', valid.errt)
+             , tf.summary.scalar('step_loss', valid.loss)))):
+    errt, loss = map(comp(np.mean, np.concatenate), zip(*batch_run(
         sess= sess
         , model= valid
-        , fetch= (valid.loss, valid.errt)
+        , fetch= (valid.errt_samp, valid.loss_samp)
         , src= src_valid
         , tgt= tgt_valid
         , batch= C.batch_valid)))
-    wtr.add_summary(sess.run(summary, {valid.loss: loss, valid.errt: errt}), step)
+    wtr.add_summary(sess.run(summary, {valid.errt: errt, valid.loss: loss}), step)
     wtr.flush()
 
 def trans(sents, model= infer):
