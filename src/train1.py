@@ -66,8 +66,8 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
              ( tf.summary.scalar('step_errt', model.errt)
              , tf.summary.scalar('step_loss', model.loss)))):
-    errt, loss = map(np.mean, zip(*chain(*(
-        batch_run(sess, m, (m.errt, m.loss), s, t, batch= C.batch_valid)
+    errt, loss = map(comp(np.mean, np.concatenate), zip(*chain(*(
+        batch_run(sess, m, (m.errt_samp, m.loss_samp), s, t, batch= C.batch_valid)
         for m, (s, t) in zip(valid, data_valid)))))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()

@@ -297,11 +297,13 @@ class Model(Record):
     def valid(self, dropout= identity, smooth= None):
         """-> Model with new fields, teacher forcing
 
-          output : f32 (b, t, dim_tgt)  prediction on logit scale
-            prob : f32 (b, t, dim_tgt)  prediction, soft
-            pred : i32 (b, t)           prediction, hard
-            loss : f32 ()               prediction loss
-            errt : f32 ()               error rate
+           output : f32 (?, dim_tgt)  prediction on logit scale
+             prob : f32 (?, dim_tgt)  prediction, soft
+             pred : i32 (?,)          prediction, hard
+        errt_samp : f32 (?,)          errors
+        loss_samp : f32 (?,)          losses
+             errt : f32 ()            error rate
+             loss : f32 ()            mean loss
 
         """
         with scope('emb_src_'): w = self.position(self.max_src) + dropout(self.emb_src(self.src))
@@ -315,12 +317,16 @@ class Model(Record):
                     , self.mask))
         with scope('prob_'): prob = tf.nn.softmax(y, axis= -1)
         with scope('pred_'): pred = tf.argmax(y, axis= -1, output_type= tf.int32)
-        with scope('errt_'): errt = tf.reduce_mean(tf.to_float(tf.not_equal(self.true, pred)))
-        with scope('loss_'): loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.true), logits= y)
-                if smooth else
-                tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.true, logits= y))
-        return Model(self, output= y, prob= prob, pred= pred, loss= loss, errt= errt)
+        with scope('errt_'):
+            errt_samp = tf.to_float(tf.not_equal(self.true, pred))
+            errt = tf.reduce_mean(errt_samp)
+        with scope('loss_'):
+            loss_samp = tf.nn.softmax_cross_entropy_with_logits_v2(labels= smooth(self.true), logits= y) \
+                if smooth else tf.nn.sparse_softmax_cross_entropy_with_logits(labels= self.true, logits= y)
+            loss = tf.reduce_mean(loss_samp)
+        return Model(self, output= y, prob= prob, pred= pred
+                     , errt_samp= errt_samp, errt= errt
+                     , loss_samp= loss_samp, loss= loss)
 
     def train(self, dropout= 0.1, smooth= 0.1, warmup= 4e3, beta1= 0.9, beta2= 0.98, epsilon= 1e-9):
         """-> Model with new fields, teacher forcing
