@@ -200,15 +200,31 @@ after training each model for ~36 epochs, with batch size 300
 
 * maybe todo
 
-- alignining all corpora is not necessary, i did that to simply the
-  training schedule and evaluation; consider taking english as the
-  common language, and introduce only one new language instead of a
-  pair of new languages; having one language familar to the model in
-  the new training stage may ease the update of the new embedding from
-  randomly initialized values to cooperate better with the trained
-  embedding spaces of the other languages
-- since the 3 languages used for pretraining are related (en de sv),
-  the pretrained model may not be general enough to adapt to new
-  languages, which is to say that the parameters in the encoder and
-  decoder are still language specific; considering pretraining with
-  more diverse languages
+- without aligning all corpora
+
+aligniing all corpora is not necessary, i did that to simply the
+training schedule and evaluation; consider taking english as the
+common language, and introduce only one new language instead of a pair
+of new languages; having one language familar to the model in the new
+training stage may ease the update of the new embedding from randomly
+initialized values to cooperate better with the trained embedding
+spaces of the other languages
+
+- more diverse languages for pretraining
+
+since the 3 languages used for pretraining are related (en de sv), the
+pretrained model may not be general enough to adapt to new languages,
+which is to say that the parameters in the encoder and decoder are
+still language specific; considering pretraining with more diverse
+languages
+
+- low-resource language
+
+try training the second stage with a small parallel corpora, which
+might benefit from my pretraining method.
+
+- monolingual corpora for zero-shot translation
+
+the second stage of training probably does not require a parallel
+corpus.  try training the second stage simply as language modelling,
+and see if it works with zero-shot translation.

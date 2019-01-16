@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2019-01-13 Sun 13:15 -->
+<!-- 2019-01-16 Wed 10:04 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>multilingual</title>
@@ -256,18 +256,18 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org5ef6f3e">1. background</a></li>
-<li><a href="#org3375556">2. motivation</a></li>
-<li><a href="#org9ace381">3. idea</a></li>
-<li><a href="#orgaf5892d">4. data</a></li>
-<li><a href="#orge83a903">5. bleu</a></li>
-<li><a href="#orga7445de">6. maybe todo</a></li>
+<li><a href="#org39f77da">1. background</a></li>
+<li><a href="#orgf9f931a">2. motivation</a></li>
+<li><a href="#orga6dfc92">3. idea</a></li>
+<li><a href="#org25b4912">4. data</a></li>
+<li><a href="#org191283b">5. bleu</a></li>
+<li><a href="#org662ca3d">6. maybe todo</a></li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-org5ef6f3e" class="outline-2">
-<h2 id="org5ef6f3e"><span class="section-number-2">1</span> background</h2>
+<div id="outline-container-org39f77da" class="outline-2">
+<h2 id="org39f77da"><span class="section-number-2">1</span> background</h2>
 <div class="outline-text-2" id="text-1">
 <p>
 a one-way bilingual machine translation model translates from the
@@ -352,8 +352,8 @@ only the key and query transformations in the decoder.
 </div>
 </div>
 
-<div id="outline-container-org3375556" class="outline-2">
-<h2 id="org3375556"><span class="section-number-2">2</span> motivation</h2>
+<div id="outline-container-orgf9f931a" class="outline-2">
+<h2 id="orgf9f931a"><span class="section-number-2">2</span> motivation</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 a multilingual translation system with shared parameters must be
@@ -407,8 +407,8 @@ the system.
 </div>
 </div>
 
-<div id="outline-container-org9ace381" class="outline-2">
-<h2 id="org9ace381"><span class="section-number-2">3</span> idea</h2>
+<div id="outline-container-orga6dfc92" class="outline-2">
+<h2 id="orga6dfc92"><span class="section-number-2">3</span> idea</h2>
 <div class="outline-text-2" id="text-3">
 <ul class="org-ul">
 <li>5 germanic languages : en nl de da sv</li>
@@ -460,8 +460,8 @@ updating the embeddings from random initialization</li>
 </div>
 </div>
 
-<div id="outline-container-orgaf5892d" class="outline-2">
-<h2 id="orgaf5892d"><span class="section-number-2">4</span> data</h2>
+<div id="outline-container-org25b4912" class="outline-2">
+<h2 id="org25b4912"><span class="section-number-2">4</span> data</h2>
 <div class="outline-text-2" id="text-4">
 <p>
 number of non-empty instances in each corpus
@@ -510,8 +510,8 @@ number of non-empty instances in each corpus
 </div>
 </div>
 
-<div id="outline-container-orge83a903" class="outline-2">
-<h2 id="orge83a903"><span class="section-number-2">5</span> bleu</h2>
+<div id="outline-container-org191283b" class="outline-2">
+<h2 id="org191283b"><span class="section-number-2">5</span> bleu</h2>
 <div class="outline-text-2" id="text-5">
 <p>
 evaluated with <code>sacrebleu -tok intl</code>
@@ -748,29 +748,59 @@ degrades the performace (m2 vs m0)</li>
 </div>
 </div>
 
-<div id="outline-container-orga7445de" class="outline-2">
-<h2 id="orga7445de"><span class="section-number-2">6</span> maybe todo</h2>
+<div id="outline-container-org662ca3d" class="outline-2">
+<h2 id="org662ca3d"><span class="section-number-2">6</span> maybe todo</h2>
 <div class="outline-text-2" id="text-6">
 <ul class="org-ul">
-<li>alignining all corpora is not necessary, i did that to simply the
-training schedule and evaluation; consider taking english as the
-common language, and introduce only one new language instead of a
-pair of new languages; having one language familar to the model in
-the new training stage may ease the update of the new embedding from
-randomly initialized values to cooperate better with the trained
-embedding spaces of the other languages</li>
-<li>since the 3 languages used for pretraining are related (en de sv),
-the pretrained model may not be general enough to adapt to new
-languages, which is to say that the parameters in the encoder and
-decoder are still language specific; considering pretraining with
-more diverse languages</li>
+<li>without aligning all corpora</li>
 </ul>
+
+<p>
+aligniing all corpora is not necessary, i did that to simply the
+training schedule and evaluation; consider taking english as the
+common language, and introduce only one new language instead of a pair
+of new languages; having one language familar to the model in the new
+training stage may ease the update of the new embedding from randomly
+initialized values to cooperate better with the trained embedding
+spaces of the other languages
+</p>
+
+<ul class="org-ul">
+<li>more diverse languages for pretraining</li>
+</ul>
+
+<p>
+since the 3 languages used for pretraining are related (en de sv), the
+pretrained model may not be general enough to adapt to new languages,
+which is to say that the parameters in the encoder and decoder are
+still language specific; considering pretraining with more diverse
+languages
+</p>
+
+<ul class="org-ul">
+<li>low-resource language</li>
+</ul>
+
+<p>
+try training the second stage with a small parallel corpora, which
+might benefit from my pretraining method.
+</p>
+
+<ul class="org-ul">
+<li>monolingual corpora for zero-shot translation</li>
+</ul>
+
+<p>
+the second stage of training probably does not require a parallel
+corpus.  try training the second stage simply as language modelling,
+and see if it works with zero-shot translation.
+</p>
 </div>
 </div>
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: kuan yu</p>
-<p class="date">Created: 2019-01-13 Sun 13:15</p>
+<p class="date">Created: 2019-01-16 Wed 10:04</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
