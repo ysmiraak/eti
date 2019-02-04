@@ -12,14 +12,25 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     wtr.add_run_metadata(meta, tag)
 
 
-def pipe(*args, prefetch= 1, repeat= -1, name= 'pipe', **kwargs):
-    """see `tf.data.Dataset.from_generator`"""
+def pipe(gen_func, gen_types, map_func= None, map_types= None, para_map= 4, prefetch= 4, name= 'pipe'):
+    """returns iterator tensors of `gen_types` from generator `gen_func`.
+    see `tf.data.Dataset.from_generator`.
+
+    when specified, `map_func` is called on the generator outputs (as
+    numpy arrays) and tensors of `map_types` are returned instead.
+    `para_map` number of calls are processed in parallel.  `map_func`
+    must be stateless.  otherwise simply transform the data in
+    `gen_func`.  it should be used only for parallelizing heavy
+    transformations.  see `tf.data.Dataset.map` and `tf.py_func`.
+
+    """
     with scope(name):
-        return tf.data.Dataset.from_generator(*args, **kwargs) \
-                              .repeat(repeat) \
-                              .prefetch(prefetch) \
-                              .make_one_shot_iterator() \
-                              .get_next()
+        ds = tf.data.Dataset.from_generator(gen_func, gen_types)
+        if map_func is not None:
+            ds = ds.map(
+                lambda *args: tf.py_func(map_func, args, map_types, stateful= False)
+                , num_parallel_calls= para_map)
+        return ds.prefetch(prefetch).make_one_shot_iterator().get_next()
 
 
 def placeholder(dtype, shape, x= None, name= None):

@@ -11,10 +11,10 @@ from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
-C.trial = "m3_"
+C.trial = "t3_"
 C.ckpt = 3
 
-langs = 'en', 'nl', 'de', 'da', 'sv'
+langs = 'en', 'el', 'it', 'sv', 'fi'
 vocab = tuple(load_spm(pform(P.data, "vocab_{}.model".format(lang))) for lang in langs)
 sents = tuple(encode(voc, load_txt(pform(P.data, "eval_{}.txt".format(lang)))) for lang, voc in zip(langs, vocab))
 
