@@ -10,7 +10,7 @@ from util_np import np, partition, sample, batch_sample
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
-np.random.seed(seed)
+np.random.seed(C.seed)
 
 C.trial = 't1_'
 
@@ -36,7 +36,7 @@ def batch(size= C.batch_train
         _, freqs = np.unique(np.random.choice(ncor, size, p= props), return_counts= True)
         if ncor != len(freqs): continue
         ret = []
-        for cor, freq in enumerate(freqs):
+        for cor, freq in enumerate(map(int, freqs)):
             bat = np.fromiter(islice(samps[cor], freq), np.int, freq)
             ret.append((srcs[cor][bat], tgts[cor][bat]))
         yield tuple(ret)
