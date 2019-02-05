@@ -23,23 +23,22 @@ langs = 'en', 'el', 'it', 'sv'
 data_train = Record(np.load(pform(P.data, "train.npz")))
 data_valid = Record(np.load(pform(P.data, "valid.npz")))
 
-def batch(size= C.batch_train
+def batch(size= C.batch_train // 2
         , srcs= tuple(data_train["{}_{}".format(lang, lang)] for lang in langs[1:])
         , tgts= tuple(data_train["{}_{}".format(lang, 'en')] for lang in langs[1:])
         , seed= C.seed):
-    size //= 2
-    corps = tuple(range(len(tgts)))
+    corps = np.arange(len(tgts))
     sizes = np.array(list(map(len, tgts)))
     props = sizes / sizes.sum()
     samps = tuple(sample(size, seed) for size in sizes)
     while True:
         c, freqs = np.unique(np.random.choice(corps, size, p= props), return_counts= True)
-        if corps != tuple(c): continue
-        ret = []
-        for cor, freq in zip(corps, map(int, freqs)):
-            bat = np.fromiter(islice(samps[cor], freq), np.int, freq)
-            ret.append((srcs[cor][bat], tgts[cor][bat]))
-        yield tuple(ret)
+        if np.array_equal(corps, c):
+            yield tuple(
+                (src[bat], tgt[bat])
+                for src, tgt, bat in zip(srcs, tgts, (
+                        np.fromiter(islice(samp, freq), np.int, freq)
+                        for samp, freq in zip(samps, map(int, freqs)))))
 
 double = lambda pairs: tuple(chain(*(((x, y), (y, x)) for x, y in pairs)))
 data_index = double((lang, 'en') for lang in langs[1:])
