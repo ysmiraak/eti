@@ -9,7 +9,7 @@ def vpack(arrays, shape, fill, dtype= None):
     """
     array = np.full(shape, fill, dtype)
     for row, arr in zip(array, arrays):
-        row[:len(arr)] = arr
+        row[tuple(map(slice, arr.shape))] = arr
     return array
 
 

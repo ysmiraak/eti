@@ -27,16 +27,16 @@ def batch(size= C.batch_train
         , srcs= tuple(data_train["{}_{}".format(lang, lang)] for lang in langs[1:])
         , tgts= tuple(data_train["{}_{}".format(lang, 'en')] for lang in langs[1:])
         , seed= C.seed):
-    ncor = len(tgts)
     size //= 2
+    corps = tuple(range(len(tgts)))
     sizes = np.array(list(map(len, tgts)))
     props = sizes / sizes.sum()
     samps = tuple(sample(size, seed) for size in sizes)
     while True:
-        _, freqs = np.unique(np.random.choice(ncor, size, p= props), return_counts= True)
-        if ncor != len(freqs): continue
+        c, freqs = np.unique(np.random.choice(corps, size, p= props), return_counts= True)
+        if corps != tuple(c): continue
         ret = []
-        for cor, freq in enumerate(map(int, freqs)):
+        for cor, freq in zip(corps, map(int, freqs)):
             bat = np.fromiter(islice(samps[cor], freq), np.int, freq)
             ret.append((srcs[cor][bat], tgts[cor][bat]))
         yield tuple(ret)
