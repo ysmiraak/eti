@@ -12,6 +12,21 @@ def profile(sess, wtr, run, feed_dict= None, prerun= 3, tag= 'flow'):
     wtr.add_run_metadata(meta, tag)
 
 
+def init_or_restore(sess, ckpt, verbose= True):
+    """restores saved variables from `ckpt` and initializes the rest."""
+    names = {name for name, _ in tf.train.list_variables(ckpt)}
+    saved, extra = [], []
+    for var in tf.global_variables():
+        if var.name[:-2] in names:
+            saved.append(var)
+        else:
+            extra.append(var)
+    tf.train.Saver(saved).restore(sess, ckpt)
+    if verbose: print("restored {} variables from {}".format(len(saved), ckpt))
+    sess.run(tf.variables_initializer(extra))
+    if verbose: print("initialized {} variables".format(len(extra)))
+
+
 def pipe(gen_func, gen_types, map_func= None, map_types= None, para_map= 4, prefetch= 4, name= 'pipe'):
     """returns iterator tensors of `gen_types` from generator `gen_func`.
     see `tf.data.Dataset.from_generator`.

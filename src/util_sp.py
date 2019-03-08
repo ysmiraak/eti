@@ -47,7 +47,7 @@ def encode(vocab, sents, length= None, dtype= np.int32):
     the maximum length.
 
     """
-    sents = list(map(vocab.encode_as_ids, sents))
+    sents = [np.array(vocab.encode_as_ids(sent), dtype) for sent in sents]
     if length is None: length = max(map(len, sents))
     return vpack(sents, (len(sents), length), vocab.eos_id(), dtype)
 
