@@ -9,6 +9,8 @@ training
 - model 1: between en de sv
 - model 2: between nl da, from model 1
 - model 3: between nl da, from model 1, train embedding only
+- model 4: like model 3, but with only 2^18 instances
+- model 5: like model 0, but with only 2^18 instances
 
 evaluation
 
