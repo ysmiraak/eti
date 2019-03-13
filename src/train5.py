@@ -14,6 +14,7 @@ np.random.seed(C.seed)
 
 C.trial = 't5_'
 C.cap = 128
+C.batch_train = 150
 
 #############
 # load data #
@@ -55,7 +56,7 @@ def batch(size= C.batch_train
         except ValueError:
             pass
 
-data_train = pipe(batch, tf.int32)
+data_train = pipe(batch, (tf.int32, tf.int32))
 data_valid = (data_valid['fi'], data_valid['en']), (data_valid['en'], data_valid['fi'])
 data_index = ('fi', 'en'), ('en', 'fi')
 
@@ -99,8 +100,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-# todo adapt
-for _ in range(3): # ~16.72 epoch per round
+for _ in range(6): # 8.36 epochs per round
     for _ in range(250):
         for _ in tqdm(range(400), ncols= 70):
             sess.run(model.down)
