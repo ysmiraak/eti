@@ -12,8 +12,7 @@ training
 | t2    | en | fi       | t1   | to see how well t1 accomodates an alien language              |
 | t3    | fi | fi       | t1   | to see if zero-shot translation works with monolingual corpus |
 | t4    | nl | da       | t1   | to see if t1 is better (more functorial) than m1, cf. m3      |
-
-todo low resource
+| t5    | fi | fi       | t1   | like t3 but with sampled pieces                               |
 
 * data
 
