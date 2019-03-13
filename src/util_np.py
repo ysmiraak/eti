@@ -9,9 +9,9 @@ def vpack(arrays, shape, fill, dtype= None):
     """
     array = np.full(shape, fill, dtype)
     for row, arr in zip(array, arrays):
-        row[tuple(map(slice, arr.shape))] = arr
+        # row[tuple(map(slice, arr.shape))] = arr
+        row[:len(arr)] = arr
     return array
-
 
 def partition(n, m, discard= False):
     """yields pairs of indices which partitions `n` nats by `m`.  if not

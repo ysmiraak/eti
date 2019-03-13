@@ -6,7 +6,7 @@ from tqdm import tqdm
 from trial import config as C, paths as P, train as T
 from util import partial, comp, select, Record
 from util_io import pform, load_txt, save_txt
-from util_np import np, partition, sample, batch_sample
+from util_np import np, partition, sample, batch_sample, vpack
 from util_sp import load_spm, encode, decode
 from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
@@ -24,12 +24,36 @@ langs = 'en', 'el', 'it', 'sv', 'fi'
 data_train = Record(np.load(pform(P.data, "train.npz")))
 data_valid = Record(np.load(pform(P.data, "valid.npz")))
 
+vocab = load_spm("../trial/data/alien/vocab_fi.model")
+data_train = tuple(decode(vocab, data_train["fi_fi"]))
+
+def encode_capped_sample(vocab, sent, cap, alpha_min= 0.1, alpha_max= 1.0, alpha_step= 0.1):
+    alpha = alpha_min
+    while alpha <= alpha_max:
+        x = vocab.sample_encode_as_ids(sent, -1, alpha)
+        if len(x) <= cap:
+            return x
+        alpha += alpha_step
+    raise ValueError("cannot encode sentence under {} pieces".format(cap))
+
 def batch(size= C.batch_train
-        , tgt= data_train["fi_fi"]
-        , seed= C.seed):
-    # todo sample
-    for bat in batch_sample(len(tgt), size, seed):
-        yield tgt[bat]
+        , seed= C.seed
+        , vocab= vocab
+        , eos= vocab.eos_id()
+        , tgt= data_train
+        , cap= C.cap):
+    bas, bat = [], []
+    for i in sample(len(tgt), seed):
+        if size == len(bas):
+            yield vpack(bas, (size, cap), eos, np.int32) \
+                , vpack(bat, (size, cap), eos, np.int32)
+            bas, bat = [], []
+        sent = tgt[i]
+        try:
+            bas.append(encode_capped_sample(vocab, sent, cap))
+            bat.append(encode_capped_sample(vocab, sent, cap))
+        except ValueError:
+            pass
 
 data_train = pipe(batch, tf.int32)
 data_valid = (data_valid['fi'], data_valid['en']), (data_valid['en'], data_valid['fi'])

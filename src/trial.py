@@ -26,7 +26,7 @@ paths = Record(
     , raw = "../data"
     , pred = "../trial/pred"
     , ckpt = "../trial/ckpt"
-    , data = "../trial/data"
+    , data = "../trial/data/alien"
 )
 
 
