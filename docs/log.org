@@ -51,7 +51,9 @@ after training each model for ~50 epochs, with batch size 300
 | t0 t2 |   6e5 |  50.16 |
 | t3    |   3e5 |  50.16 |
 | t4    |   3e5 |  35.86 |
-| t5    |   6e5 |  50.16 |
+| t5    |   9e5 |  64.21 |
+
+=t5= doubled cap to 128 (due to sampling), with batch size 128.
 
 | tgt | src |   t0 |   t1 |   t2 |   t3 |
 |-----+-----+------+------+------+------|

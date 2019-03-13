@@ -14,7 +14,7 @@ np.random.seed(C.seed)
 
 C.trial = 't5_'
 C.cap = 128
-C.batch_train = 150
+C.batch_train = 128
 
 #############
 # load data #
@@ -100,7 +100,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-for _ in range(6): # 8.36 epochs per round
+for _ in range(9): # ~7.13 epochs per round
     for _ in range(250):
         for _ in tqdm(range(400), ncols= 70):
             sess.run(model.down)
