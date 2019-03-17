@@ -65,3 +65,12 @@ after training each model for ~36 epochs, with batch size 300
 | de  | sv  |  0.0 | 25.9 |  0.0 | 25.9 |
 | sv  | da  |  0.0 |  0.0 |  0.0 | 29.0 |
 | da  | sv  |  0.1 |  0.0 |  0.1 | 29.8 |
+
+with 2^18 instances
+
+| tgt | src | m5 1 | m5 2 | m4 5 |
+|-----+-----+------+------+------|
+| da  | nl  | 27.0 | 27.1 | 26.0 |
+| nl  | da  | 25.9 | 25.6 | 23.5 |
+
+with 2^17 instances
