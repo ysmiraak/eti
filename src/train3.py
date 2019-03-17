@@ -29,16 +29,16 @@ def batch(size= C.batch_train
     for bat in batch_sample(len(tgt), size, seed):
         yield tgt[bat]
 
-data_index = 'fi', 'fi'
 data_train = (pipe(batch, tf.int32),) * 2
-data_valid = data_valid['fi']
+data_valid = (data_valid['fi'], data_valid['en']), (data_valid['en'], data_valid['fi'])
+data_index = ('fi', 'en'), ('en', 'fi')
 
 ###############
 # build model #
 ###############
 
 model = Model.new(langs, **select(C, *Model._new))
-valid = model.data('fi', 'fi').valid()
+valid = tuple(model.data(sid, tid).valid() for sid, tid in data_index)
 train = model.data('fi', 'fi', *data_train).train(**T)
 
 model.lr   = train.lr
@@ -67,8 +67,9 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
          , summary = tf.summary.merge(
              ( tf.summary.scalar('step_errt', model.errt)
              , tf.summary.scalar('step_loss', model.loss)))):
-    errt, loss = map(comp(np.mean, np.concatenate), zip(*batch_run(
-        sess, valid, (valid.errt_samp, valid.loss_samp), data_valid, data_valid, batch= C.batch_valid)))
+    errt, loss = map(comp(np.mean, np.concatenate), zip(*chain(*(
+        batch_run(sess, m, (m.errt_samp, m.loss_samp), s, t, batch= C.batch_valid)
+        for m, (s, t) in zip(valid, data_valid)))))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
