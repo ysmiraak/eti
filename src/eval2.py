@@ -12,13 +12,11 @@ from util_tf import tf, pipe
 tf.set_random_seed(C.seed)
 
 C.trial = "m4_"
-C.ckpt = 3
 
 langs = 'en', 'nl', 'de', 'da', 'sv'
 vocab = tuple(load_spm(pform(P.data, "vocab_{}.model".format(lang))) for lang in langs)
 sents = tuple(encode(voc, load_txt(pform(P.data, "eval_{}.txt".format(lang)))) for lang, voc in zip(langs, vocab))
 
-# index = tuple(permutations(range(5), 2))
 index = (1, 3), (3, 1)
 model = Model.new(**select(C, *Model._new))
 model = tuple(model.data(i, j).infer() for i, j in index)

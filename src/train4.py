@@ -23,8 +23,8 @@ valid_nl, train_nl = np.load(pform(P.data, "valid_nl.npy")), np.load(pform(P.dat
 valid_da, train_da = np.load(pform(P.data, "valid_da.npy")), np.load(pform(P.data, "train_da.npy"))
 # valid_sv, train_sv = np.load(pform(P.data, "valid_sv.npy")), np.load(pform(P.data, "train_sv.npy"))
 
-train_nl = train_nl[:2**18].copy()
-train_da = train_da[:2**18].copy()
+train_nl = train_nl[:2**17].copy()
+train_da = train_da[:2**17].copy()
 
 data_index =        1,        3
 data_valid = valid_nl, valid_da
@@ -80,7 +80,7 @@ def summ(step, wtr = tf.summary.FileWriter(pform(P.log, C.trial))
     wtr.add_summary(sess.run(summary, {model.errt: errt, model.loss: loss}), step)
     wtr.flush()
 
-for _ in range(5): # ~22.888 epoch per round
+for _ in range(9): # ~22.888 epoch per round
     for _ in range(100):
         for _ in tqdm(range(400), ncols= 70):
             sess.run(model.down)
