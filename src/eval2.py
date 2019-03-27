@@ -28,7 +28,7 @@ def trans(sents, model, vocab):
     for preds in batch_run(sess, model, model.pred, sents, batch= C.batch_infer):
         yield from decode(vocab, preds)
 
-for ckpt in 3, 4, 5:
+for ckpt in 5, 6, 7, 8, 9:
     saver.restore(sess, pform(P.ckpt, C.trial, ckpt))
     for (i, j), m in zip(index, model):
         print(langs[j], "<-", langs[i])
